@@ -2,6 +2,8 @@ name: Mesa de Operações - build
 on:
   push:
     branches: [mesa-operacoes-v1]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 permissions:
   contents: read
@@ -20,3 +22,5 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
+      - name: Verify initial agent roster and persistence
+        run: pnpm exec tsx --test scripts/mesa-seed.test.ts
