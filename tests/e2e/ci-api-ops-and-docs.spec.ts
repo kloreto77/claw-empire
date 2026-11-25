@@ -147,6 +147,7 @@ test.describe("CI API ops and docs coverage", () => {
     const seed = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
     const deptId = `ci_pause_dept_${seed}`;
     const cleanup = {
+      apiProviderIds: [] as string[],
       taskIds: [] as string[],
       agentIds: [] as string[],
       departmentIds: [deptId],
@@ -155,6 +156,21 @@ test.describe("CI API ops and docs coverage", () => {
 
     try {
       const csrfToken = await establishApiSession(request);
+
+      const provider = await expectOkJson<{ ok: boolean; id: string }>(
+        await request.post("/api/api-providers", {
+          data: {
+            name: `ci-pause-provider-${seed}`,
+            type: "openai",
+            base_url: "http://127.0.0.1:9/v1",
+            api_key: "ci-test-key",
+            enabled: true,
+            models_cache: JSON.stringify(["ci-test-model"]),
+          },
+        }),
+        "POST /api/api-providers(pause)",
+      );
+      cleanup.apiProviderIds.push(provider.id);
 
       await expectOkJson(
         await request.post("/api/departments", {
@@ -175,6 +191,8 @@ test.describe("CI API ops and docs coverage", () => {
             department_id: deptId,
             role: "senior",
             cli_provider: "api",
+            api_provider_id: provider.id,
+            api_model: "ci-test-model",
             avatar_emoji: "P",
           },
         }),
