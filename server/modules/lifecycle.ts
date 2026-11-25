@@ -452,6 +452,7 @@ export function startLifecycle(ctx: RuntimeContext): void {
   }
 
   // Run rotation every 60 seconds, and once on startup after 5s
+  // The trading desk does not simulate employee breaks unless explicitly enabled.
   if (process.env.MESA_SIMULATE_BREAKS === "true") {
     setTimeout(rotateBreaks, 5_000);
     setInterval(rotateBreaks, 60_000);
