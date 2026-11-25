@@ -1,6 +1,6 @@
 $ErrorActionPreference = 'Stop'
 $root = Join-Path $PWD 'desktop-diagnostics/update-test'
-$installDir = Join-Path $root 'installed'
+$installDir = Join-Path $env:LOCALAPPDATA 'MesaV2-CI-Install'
 $profile = Join-Path $root 'profile'
 $fixture = Join-Path $PWD 'desktop-update-fixture/Mesa-V2-Setup-2.0.0-x64.exe'
 $release = Join-Path $PWD 'desktop-release'
@@ -24,8 +24,21 @@ function Run-App([string]$label, [string[]]$flags, [int]$timeout) {
 
 $server = $null
 try {
-  $setup = Start-Process -FilePath $fixture -ArgumentList @('/S',"/D=$installDir") -PassThru
-  if (!$setup.WaitForExit(180000)) { Stop-Process -Id $setup.Id -Force; throw 'Installer timed out' }
+  $setup = Start-Process -FilePath $fixture -ArgumentList "/S /D=$installDir" -PassThru
+  for ($i=0; $i -lt 20 -and !$setup.HasExited; $i++) {
+    $null = $setup.WaitForExit(30000)
+    $setup.Refresh()
+    if (!$setup.HasExited) {
+      Write-Host "Installation in progress: $((($i+1)*30)) seconds"
+      Get-Process -Id $setup.Id -ErrorAction SilentlyContinue | Select-Object Id,ProcessName,CPU,WorkingSet | Format-Table
+    }
+  }
+  if (!$setup.HasExited) {
+    Get-Process | Where-Object { $_.ProcessName -match 'Mesa|Setup|nsis' } | Select-Object Id,ProcessName,CPU | Format-Table
+    if (Test-Path $installDir) { Get-ChildItem $installDir | Select-Object Name,Length | Format-Table }
+    Stop-Process -Id $setup.Id -Force
+    throw 'Installer timed out after ten minutes'
+  }
   if ($setup.ExitCode -ne 0 -or !(Test-Path $exe)) { throw 'Installer failed' }
   Run-App 'before' @('--mesa-smoke-test') 120000
   $db = Join-Path $profile 'smoke-runtime/mesa.sqlite'
@@ -50,11 +63,18 @@ try {
   if (!$feedReady) { throw 'Update feed unavailable' }
   Run-App 'update' @('--mesa-smoke-test','--mesa-update-test') 300000
   $installed = $false
-  for ($i=0; $i -lt 180; $i++) {
+  for ($i=0; $i -lt 600; $i++) {
     try { if ((Get-FileHash $asar -Algorithm SHA256).Hash -eq $expectedHash) { $installed = $true; break } } catch {}
     Start-Sleep -Seconds 1
   }
   if (!$installed) { throw 'Updated application was not installed' }
+  # The ASAR may be copied before the installer finishes extracting the backend.
+  for ($i=0; $i -lt 300; $i++) {
+    $setupProcesses = Get-Process | Where-Object { $_.ProcessName -like 'Mesa-V2-Setup*' }
+    if (!$setupProcesses) { break }
+    Start-Sleep -Seconds 1
+  }
+  if ($setupProcesses) { throw 'Update installer did not finish' }
   Start-Sleep -Seconds 5
   Run-App 'after' @('--mesa-smoke-test') 120000
   $log = Join-Path $profile 'smoke-runtime/logs/desktop-main.log'

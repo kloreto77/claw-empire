@@ -1,6 +1,6 @@
 {
   "name": "mesa-operacoes-desktop",
-  "version": "2.0.7",
+  "version": "2.0.8",
   "private": true,
   "main": "main.cjs",
   "description": "Mesa de Operações V2 para Windows",
@@ -45,12 +45,12 @@
       "artifactName": "Mesa-V2-Setup-${version}-${arch}.${ext}"
     },
     "nsis": {
-      "oneClick": false,
+      "oneClick": true,
       "perMachine": false,
-      "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "deleteAppDataOnUninstall": false
+      "deleteAppDataOnUninstall": false,
+      "runAfterFinish": false
     },
     "publish": [
       {
