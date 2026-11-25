@@ -270,20 +270,23 @@ export function registerTaskRunRoute(deps: TaskRunRouteDeps): void {
     }
     if (!agent) return res.status(400).json({ error: "agent_not_found" });
 
-    const agentBusy = activeProcesses.has(
-      (
-        db.prepare("SELECT current_task_id FROM agents WHERE id = ? AND status = 'working'").get(agentId) as
-          | { current_task_id: string | null }
-          | undefined
-      )?.current_task_id ?? "",
-    );
-    if (agentBusy) {
-      return res
-        .status(400)
-        .json({ error: "agent_busy", message: `${agent.name} is already working on another task.` });
+    // Reject concurrent work for the same agent even while a process handle is
+    // still being registered. Different agents remain independently runnable.
+    const executionState = db.prepare("SELECT status, current_task_id FROM agents WHERE id = ?").get(agentId) as
+      | { status: string; current_task_id: string | null }
+      | undefined;
+    const otherActiveTask = db.prepare(
+      "SELECT id FROM tasks WHERE assigned_agent_id = ? AND id <> ? AND status IN ('in_progress', 'collaborating') LIMIT 1",
+    ).get(agentId, id);
+    if (executionState?.status === "offline" || otherActiveTask ||
+        (executionState?.current_task_id !== id && executionState?.status === "working")) {
+      return res.status(409).json({ error: "agent_busy_or_unavailable", message: "Agent already occupied or offline." });
+    }
+    if (!agent.cli_provider || (agent.cli_provider === "api" && (!agent.api_provider_id || !agent.api_model))) {
+      return res.status(409).json({ error: "agent_not_configured", message: "Choose a provider and model before running." });
     }
 
-    const provider = agent.cli_provider || "claude";
+    const provider = agent.cli_provider;
     if (!["claude", "codex", "gemini", "opencode", "kimi", "copilot", "antigravity", "api"].includes(provider)) {
       return res.status(400).json({ error: "unsupported_provider", provider });
     }
