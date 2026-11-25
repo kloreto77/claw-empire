@@ -1,0 +1,80 @@
+name: Mesa V2 - Windows desktop
+on:
+  push:
+    branches: [mesa-operacoes-v2]
+    paths:
+      - "desktop/**"
+      - ".github/workflows/mesa-windows.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  package:
+    runs-on: windows-2025
+    timeout-minutes: 35
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: "false"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --config.node-linker=hoisted
+      - run: pnpm build
+      - run: pnpm exec tsx --test scripts/mesa-seed.test.ts
+      - name: Stage local runtime
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $stage = Join-Path $PWD '.desktop-runtime'
+          New-Item -ItemType Directory -Path $stage -Force | Out-Null
+          foreach ($dir in @('server','dist','node_modules','scripts','public','docs','templates','tools','slides')) {
+            if (Test-Path $dir) {
+              robocopy $dir (Join-Path $stage $dir) /E /R:1 /W:1 /NFL /NDL /NJH /NJS /NP
+              if ($LASTEXITCODE -ge 8) { throw "Copy failed: $dir" }
+              $global:LASTEXITCODE = 0
+            }
+          }
+          Copy-Item package.json $stage
+          Copy-Item tsconfig*.json $stage
+          Copy-Item desktop/backend.mjs (Join-Path $stage 'desktop-backend.mjs')
+          Copy-Item (Get-Command node.exe).Source (Join-Path $stage 'node.exe')
+          if (!(Test-Path (Join-Path $stage 'node_modules/tsx/dist/loader.mjs'))) { throw 'Missing tsx loader' }
+      - name: Install desktop build tools
+        working-directory: desktop
+        run: npm install --no-audit --no-fund
+      - name: Format desktop sources
+        run: pnpm exec prettier --check desktop/main.cjs desktop/backend.mjs desktop/package.json .github/workflows/mesa-windows.yml
+        continue-on-error: true
+      - name: Package Windows installer
+        working-directory: desktop
+        run: npx --no-install electron-builder --win nsis --x64 --publish never
+      - name: Launch packaged desktop smoke test
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $exe = Join-Path $PWD 'desktop-release/win-unpacked/MesaOperacoesV2.exe'
+          if (!(Test-Path $exe)) { throw 'Packaged executable missing' }
+          $p = Start-Process -FilePath $exe -ArgumentList '--mesa-smoke-test' -PassThru
+          if (!$p.WaitForExit(120000)) { Stop-Process -Id $p.Id -Force; throw 'Desktop startup timed out' }
+          if ($p.ExitCode -ne 0) { throw "Desktop smoke failed: $($p.ExitCode)" }
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: Mesa-V2-Windows-x64
+          path: desktop-release/Mesa-V2-Setup-*.exe
+          if-no-files-found: error
+          retention-days: 30
+      - name: Upload desktop diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Mesa-V2-Windows-diagnostics
+          path: |
+            ${{ env.APPDATA }}/mesa-operacoes-desktop/smoke-runtime/logs/
+            desktop/package-lock.json
+          if-no-files-found: ignore
