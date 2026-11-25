@@ -314,7 +314,23 @@ export default function AppMainLayout({
         : (activePackProfile?.agents ?? seededPackAgents);
 
   const officePresentation = useMemo(() => {
-    if (officePackKey === "development") return generatedOfficePresentation;
+    if (officePackKey === "development") {
+      // The initial desk shares a single operations room. Hide unused rooms
+      // without deleting departments or altering agent records.
+      const presentation = generatedOfficePresentation;
+      const occupiedIds = new Set(presentation.agents.map((agent) => agent.department_id));
+      const occupiedRooms = presentation.departments.filter((department) => occupiedIds.has(department.id));
+      const operationsRoom = presentation.departments.find((department) => department.id === "operations");
+      const visibleRooms = occupiedRooms.length > 0 ? occupiedRooms : operationsRoom ? [operationsRoom] : presentation.departments.slice(0, 1);
+      return {
+        ...presentation,
+        departments: visibleRooms.map((department) =>
+          department.id === "operations"
+            ? { ...department, name: "Mesa de Operações", name_ko: "Mesa de Operações", name_ja: "Mesa de Operações", name_zh: "Mesa de Operações" }
+            : department,
+        ),
+      };
+    }
     return {
       departments: displayDepartments,
       agents: officeScopedAgents,
