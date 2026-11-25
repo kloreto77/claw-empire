@@ -1,6 +1,6 @@
 {
   "name": "mesa-operacoes-desktop",
-  "version": "2.0.4",
+  "version": "2.0.5",
   "private": true,
   "main": "main.cjs",
   "description": "Mesa de Operações V2 para Windows",
@@ -50,6 +50,16 @@
       "createStartMenuShortcut": true,
       "deleteAppDataOnUninstall": false
     },
-    "publish": null
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "kloreto77",
+        "repo": "claw-empire",
+        "releaseType": "release"
+      }
+    ]
+  },
+  "dependencies": {
+    "electron-updater": "6.8.12"
   }
 }

@@ -4,8 +4,18 @@ on:
     branches: [mesa-operacoes-v2]
     paths:
       - "desktop/**"
+      - "server/**"
+      - "src/**"
+      - "public/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
       - ".github/workflows/mesa-windows.yml"
   workflow_dispatch:
+    inputs:
+      publish_release:
+        description: Publish a tested desktop version to GitHub Releases
+        type: boolean
+        default: false
 permissions:
   contents: read
 jobs:
@@ -53,20 +63,48 @@ jobs:
       - name: Package Windows installer
         working-directory: desktop
         run: npx --no-install electron-builder --win nsis --x64 --publish never
+      - name: Validate bundled backend runtime
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $runtime = Join-Path $PWD 'desktop-release/win-unpacked/resources/mesa-runtime'
+          $node = Join-Path $runtime 'node.exe'
+          $loader = Join-Path $runtime 'node_modules/tsx/dist/loader.mjs'
+          & $node --version
+          if ($LASTEXITCODE -ne 0) { throw 'Bundled Node failed' }
+          $loaderUri = ([uri]$loader).AbsoluteUri
+          & $node --import $loaderUri -e "require('node:sqlite'); console.log('Bundled SQLite and tsx OK')"
+          if ($LASTEXITCODE -ne 0) { throw 'Bundled Node/tsx/SQLite failed' }
       - name: Launch packaged desktop smoke test
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           $exe = Join-Path $PWD 'desktop-release/win-unpacked/MesaOperacoesV2.exe'
           if (!(Test-Path $exe)) { throw 'Packaged executable missing' }
-          $p = Start-Process -FilePath $exe -ArgumentList '--mesa-smoke-test' -PassThru
-          if (!$p.WaitForExit(120000)) { Stop-Process -Id $p.Id -Force; throw 'Desktop startup timed out' }
-          if ($p.ExitCode -ne 0) { throw "Desktop smoke failed: $($p.ExitCode)" }
+          $diag = Join-Path $PWD 'desktop-diagnostics'
+          New-Item -ItemType Directory -Path $diag -Force | Out-Null
+          $env:MESA_SMOKE_DIR = $diag
+          $env:ELECTRON_ENABLE_LOGGING = '1'
+          $p = Start-Process -FilePath $exe -ArgumentList '--mesa-smoke-test','--enable-logging=stderr' -PassThru -RedirectStandardOutput (Join-Path $diag 'stdout.log') -RedirectStandardError (Join-Path $diag 'stderr.log')
+          try {
+            if (!$p.WaitForExit(120000)) { Stop-Process -Id $p.Id -Force; throw 'Desktop startup timed out' }
+            if ($p.ExitCode -ne 0) { throw "Desktop smoke failed: $($p.ExitCode)" }
+            if (!(Test-Path (Join-Path $diag 'smoke-runtime/logs/desktop-main.log'))) { throw 'Missing smoke log' }
+            if (!(Select-String -Path (Join-Path $diag 'smoke-runtime/logs/desktop-main.log') -Pattern 'Smoke test passed.' -SimpleMatch)) { throw 'Missing smoke success marker' }
+          } finally {
+            Get-ChildItem $diag -Filter '*.log' -Recurse | ForEach-Object {
+              Write-Host "=== $($_.Name) ==="
+              Get-Content $_.FullName -Tail 100
+            }
+          }
       - name: Upload installer
         uses: actions/upload-artifact@v4
         with:
           name: Mesa-V2-Windows-x64
-          path: desktop-release/Mesa-V2-Setup-*.exe
+          path: |
+            desktop-release/Mesa-V2-Setup-*.exe
+            desktop-release/Mesa-V2-Setup-*.exe.blockmap
+            desktop-release/latest.yml
           if-no-files-found: error
           retention-days: 30
       - name: Upload desktop diagnostics
@@ -75,6 +113,26 @@ jobs:
         with:
           name: Mesa-V2-Windows-diagnostics
           path: |
-            ${{ env.APPDATA }}/mesa-operacoes-desktop/smoke-runtime/logs/
+            desktop-diagnostics/**/*.log
             desktop/package-lock.json
           if-no-files-found: ignore
+  publish:
+    if: github.event_name == 'workflow_dispatch' && inputs.publish_release && github.ref == 'refs/heads/mesa-operacoes-v2'
+    needs: package
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: Mesa-V2-Windows-x64
+          path: desktop-release
+      - name: Publish validated release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          version="$(node -p "require('./desktop/package.json').version")"
+          test -s desktop-release/latest.yml
+          gh release create "v$version" desktop-release/Mesa-V2-Setup-*.exe desktop-release/Mesa-V2-Setup-*.exe.blockmap desktop-release/latest.yml --target "$GITHUB_SHA" --title "Mesa V2 Desktop $version" --notes "Windows x64. Build and desktop smoke test passed. Experimental unsigned installer."

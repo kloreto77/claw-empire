@@ -10,3 +10,7 @@ A versão desktop mantém a interface React, o backend Node.js e o SQLite existe
 - O instalador experimental não tem assinatura comercial; o Windows pode exibir aviso de reputação. Não desative as proteções do sistema.
 - O workflow testa compilação, recuperação unitária e abertura do executável empacotado no Windows. Ainda não substitui a instalação real, teste de oito agentes ativos, calendário de mercado, medição de recursos e recuperação de desligamento forçado no notebook.
 - O pacote inclui dependências de desenvolvimento por enquanto, para evitar perda de dependências do servidor. A redução do tamanho e os testes de integrações específicas são etapas posteriores.
+
+## Atualizações automáticas
+
+O desktop consulta a última release estável do repositório público a cada hora e na abertura, baixa em segundo plano e instala no fechamento normal somente após o backend confirmar ausência de tarefas ativas e encerrar com sucesso. Não reinicia a Mesa durante operações. A publicação exige uma versão incrementada e execução manual do workflow com `publish_release=true` depois da validação. Commits intermediários não chegam ao notebook. A primeira versão continua experimental e sem certificado comercial; a distribuição usa GitHub Releases e verificação de integridade do updater, não uma assinatura de editor Windows. O teste real de atualização entre duas releases ainda é necessário.

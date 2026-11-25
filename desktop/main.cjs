@@ -14,6 +14,25 @@ let stopped = false;
 let data;
 let token;
 let origin;
+let updater;
+let updateReady = false;
+let cleanForUpdate = false;
+let checkingUpdate = false;
+const smokeDir = smoke && process.env.MESA_SMOKE_DIR;
+if (smokeDir) app.setPath("userData", smokeDir);
+const diagnosticDir = path.join(app.getPath("userData"), smoke ? "smoke-runtime" : "runtime", "logs");
+fs.mkdirSync(diagnosticDir, { recursive: true });
+function report(message) {
+  try {
+    fs.appendFileSync(path.join(diagnosticDir, "desktop-main.log"), new Date().toISOString() + " " + message + "\n");
+  } catch {
+    // Diagnostics must never prevent startup.
+  }
+}
+report("Desktop main started: " + app.getVersion());
+process.on("uncaughtException", (error) => fail(error));
+process.on("unhandledRejection", (error) => fail(error instanceof Error ? error : new Error(String(error))));
+
 
 function reservePort() {
   return new Promise((resolve, reject) => {
@@ -52,6 +71,7 @@ async function startBackend() {
     fs.rmSync(log + ".previous", { force: true });
     fs.renameSync(log, log + ".previous");
   }
+  report("Starting bundled backend: " + runtime);
   const fd = fs.openSync(log, "a");
   const env = {
     ...process.env,
@@ -70,6 +90,7 @@ async function startBackend() {
     UPDATE_CHECK_ENABLED: "0",
     CLAW_MIGRATION_V1_0_5_DONE: "1",
     NODE_ENV: "production",
+    TSX_TSCONFIG_PATH: path.join(runtime, "tsconfig.json"),
   };
   for (const key of ["NODE_OPTIONS", "VITE_DEV", "ELECTRON_RUN_AS_NODE", "OPENCLAW_CONFIG", "INBOX_WEBHOOK_SECRET"]) {
     delete env[key];
@@ -84,11 +105,16 @@ async function startBackend() {
   } finally {
     fs.closeSync(fd);
   }
+  child.on("message", (message) => {
+    if (message?.type === "mesa-shutdown-status") cleanForUpdate = message.idle === true;
+  });
   child.once("error", (error) => {
+    report("Backend spawn error: " + error.stack);
     stopped = true;
     if (!quitting) fail(error);
   });
   child.once("exit", (code) => {
+    report("Backend exit: " + code);
     stopped = true;
     if (!quitting) fail(new Error("Local backend stopped: " + code));
   });
@@ -100,7 +126,10 @@ async function startBackend() {
       });
       if (response.ok) {
         const body = await response.json();
-        if (Array.isArray(body.agents)) return body.agents;
+        if (Array.isArray(body.agents)) {
+          report("Backend ready: " + body.agents.length + " agents");
+          return body.agents;
+        }
       }
     } catch {
       // Wait for the local server to start.
@@ -111,25 +140,72 @@ async function startBackend() {
 }
 
 function setupMenu() {
-  Menu.setApplicationMenu(Menu.buildFromTemplate([
-    {
-      label: "Mesa",
-      submenu: [
-        {
-          label: "Iniciar com o Windows",
-          type: "checkbox",
-          checked: app.getLoginItemSettings().openAtLogin,
-          click: (item) => app.setLoginItemSettings({ openAtLogin: item.checked }),
-        },
-        { type: "separator" },
-        { label: "Fechar Mesa", accelerator: "Alt+F4", click: () => app.quit() },
-      ],
-    },
-    { label: "Visualizar", submenu: [{ role: "reload" }, { role: "togglefullscreen" }] },
-  ]));
+  if (smoke) return;
+  Menu.setApplicationMenu(
+    Menu.buildFromTemplate([
+      {
+        label: "Mesa",
+        submenu: [
+          {
+            label: "Iniciar com o Windows",
+            type: "checkbox",
+            checked: app.getLoginItemSettings().openAtLogin,
+            click: (item) => app.setLoginItemSettings({ openAtLogin: item.checked }),
+          },
+          {
+            label: updateReady ? "Atualização pronta — instalar ao fechar sem tarefas ativas" : "Verificar atualizações",
+            click: () => {
+              if (!updateReady) void checkUpdates(true);
+            },
+          },
+          { type: "separator" },
+          { label: "Fechar Mesa", accelerator: "Alt+F4", click: () => app.quit() },
+        ],
+      },
+      { label: "Visualizar", submenu: [{ role: "reload" }, { role: "togglefullscreen" }] },
+    ]),
+  );
+}
+
+async function checkUpdates(manual = false) {
+  if (!updater || checkingUpdate || updateReady || quitting) return;
+  checkingUpdate = true;
+  try {
+    const result = await updater.checkForUpdates();
+    if (manual && !result?.isUpdateAvailable && !updateReady) {
+      await dialog.showMessageBox({ message: "Nenhuma atualização disponível." });
+    }
+  } catch (error) {
+    report("Update check: " + String(error));
+    if (manual) await dialog.showMessageBox({ message: "Não foi possível verificar atualizações agora." });
+  } finally {
+    checkingUpdate = false;
+  }
+}
+
+function configureUpdates() {
+  if (!app.isPackaged || smoke) return;
+  try {
+    updater = require("electron-updater").autoUpdater;
+    updater.autoDownload = true;
+    updater.autoInstallOnAppQuit = false;
+    updater.allowPrerelease = false;
+    updater.allowDowngrade = false;
+    updater.on("error", (error) => report("Updater: " + String(error)));
+    updater.on("update-downloaded", () => {
+      updateReady = true;
+      report("Update ready; waiting for clean idle shutdown.");
+      setupMenu();
+    });
+    void checkUpdates();
+    setInterval(() => void checkUpdates(), 60 * 60 * 1000).unref();
+  } catch (error) {
+    report("Updater initialization: " + String(error));
+  }
 }
 
 async function openWindow() {
+  report("Creating desktop window");
   window = new BrowserWindow({
     title: "Mesa de Operações V2",
     width: 1440,
@@ -156,15 +232,20 @@ async function openWindow() {
   window.webContents.on("will-redirect", (event, target) => {
     if (new URL(target).origin !== origin) event.preventDefault();
   });
+  window.webContents.on("render-process-gone", (_event, details) => report("Renderer gone: " + JSON.stringify(details)));
   await window.loadURL(origin);
+  report("Desktop page loaded");
   if (!smoke) window.show();
 }
 
 function fail(error) {
   if (quitting) return;
-  if (!smoke) dialog.showErrorBox("Mesa de Operações V2", String(error.message || error) +
-    "\nLogs: " + (data ? path.join(data, "logs") : app.getPath("userData")));
-  else console.error(error);
+  report("Startup failure: " + String(error?.stack || error));
+  if (!smoke) {
+    dialog.showErrorBox("Mesa de Operações V2", String(error?.message || error) + "\nLogs: " + diagnosticDir);
+  } else {
+    console.error(error);
+  }
   shutdown(1);
 }
 
@@ -173,17 +254,34 @@ function shutdown(code = 0) {
   quitting = true;
   if (!child || stopped) return app.exit(code);
   const timer = setTimeout(() => {
-    try { child.kill(); } catch { /* already stopped */ }
+    try {
+      child.kill();
+    } catch {
+      // Already stopped.
+    }
     app.exit(code || 1);
   }, 8000);
-  child.once("exit", () => {
+  child.once("exit", (backendCode) => {
     clearTimeout(timer);
-    app.exit(code);
+    if (code === 0 && backendCode === 0 && updateReady && cleanForUpdate && updater && !smoke) {
+      report("Applying downloaded update after clean idle shutdown.");
+      try {
+        updater.quitAndInstall(true, false);
+        return;
+      } catch (error) {
+        report("Update install failed: " + String(error));
+      }
+    }
+    if (updateReady && !cleanForUpdate) report("Update deferred: backend was not confirmed idle.");
+    app.exit(code || (smoke && backendCode !== 0 ? 1 : 0));
   });
-  if (child.connected) child.send({ type: "mesa-shutdown" }, (error) => {
-    if (error) child.kill();
-  });
-  else child.kill();
+  if (child.connected) {
+    child.send({ type: "mesa-shutdown" }, (error) => {
+      if (error) child.kill();
+    });
+  } else {
+    child.kill();
+  }
 }
 
 if (!app.requestSingleInstanceLock()) {
@@ -206,12 +304,16 @@ if (!app.requestSingleInstanceLock()) {
     const agents = await startBackend();
     setupMenu();
     await openWindow();
+    configureUpdates();
     if (smoke) {
       if (agents.length !== 8) throw new Error("Expected eight initial agents.");
-      const rendered = await window.webContents.executeJavaScript(
-        "document.querySelector('#root') !== null && document.title.length > 0",
-      );
-      if (!rendered) throw new Error("UI document did not load.");
+      let rendered = false;
+      for (let i = 0; i < 40 && !rendered; i++) {
+        rendered = await window.webContents.executeJavaScript("Boolean(document.querySelector('#root')?.childElementCount)");
+        if (!rendered) await new Promise((resolve) => setTimeout(resolve, 250));
+      }
+      if (!rendered) throw new Error("UI did not render.");
+      report("Smoke test passed.");
       shutdown();
     }
   }).catch(fail);
