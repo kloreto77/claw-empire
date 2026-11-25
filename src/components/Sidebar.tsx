@@ -16,14 +16,15 @@ interface SidebarProps {
 const NAV_ITEMS: { view: View; icon: string; sprite?: string }[] = [
   { view: "office", icon: "🏢" },
   { view: "agents", icon: "👥", sprite: "/sprites/3-D-1.png" },
-  { view: "skills", icon: "📚" },
-  { view: "dashboard", icon: "📊" },
   { view: "tasks", icon: "📋" },
+  { view: "dashboard", icon: "📊" },
   { view: "settings", icon: "⚙️" },
+  { view: "skills", icon: "📚" },
 ];
 
 export default function Sidebar({ currentView, onChangeView, departments, agents, settings, connected }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const { t, locale } = useI18n();
   const workingCount = agents.filter((a) => a.status === "working").length;
   const totalAgents = agents.length;
@@ -77,7 +78,7 @@ export default function Sidebar({ currentView, onChangeView, departments, agents
 
       {/* Navigation */}
       <nav className="flex-1 py-2 space-y-0.5 px-2">
-        {NAV_ITEMS.map((item) => (
+        {NAV_ITEMS.filter((item) => item.view !== "skills" || showAdvanced || currentView === "skills").map((item) => (
           <button
             key={item.view}
             onClick={() => onChangeView(item.view)}
@@ -100,10 +101,20 @@ export default function Sidebar({ currentView, onChangeView, departments, agents
             {!collapsed && <span>{navLabels[item.view]}</span>}
           </button>
         ))}
+        <button
+          type="button"
+          aria-expanded={showAdvanced}
+          title={tr("고급 메뉴", "Advanced tools")}
+          onClick={() => setShowAdvanced((value) => !value)}
+          className="sidebar-nav-item"
+        >
+          <span aria-hidden="true">{showAdvanced ? "−" : "+"}</span>
+          {!collapsed && <span>{tr("고급 메뉴", "Advanced tools")}</span>}
+        </button>
       </nav>
 
       {/* Department quick stats */}
-      {!collapsed && (
+      {!collapsed && showAdvanced && (
         <div className="px-3 py-2" style={{ borderTop: "1px solid var(--th-border)" }}>
           <div
             className="text-[10px] uppercase font-semibold mb-1.5 tracking-wider"
