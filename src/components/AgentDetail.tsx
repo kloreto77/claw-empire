@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { OAuthStatus } from "../api";
+import type { ApiProvider, OAuthStatus } from "../api";
 import * as api from "../api";
 import { localeName, useI18n } from "../i18n";
 import type {
@@ -65,6 +65,12 @@ export default function AgentDetail({
   const [selectedCliModel, setSelectedCliModel] = useState(agent.cli_model ?? "");
   const [selectedCliReasoningLevel, setSelectedCliReasoningLevel] = useState(agent.cli_reasoning_level ?? "");
   const [savingCli, setSavingCli] = useState(false);
+  const [apiProviders, setApiProviders] = useState<ApiProvider[]>([]);
+  const [apiModels, setApiModels] = useState<string[]>([]);
+  const [apiLoading, setApiLoading] = useState(false);
+  const [configError, setConfigError] = useState("");
+  const [instructionDraft, setInstructionDraft] = useState(agent.personality ?? "");
+  const [savingInstructions, setSavingInstructions] = useState(false);
   const [oauthStatus, setOauthStatus] = useState<OAuthStatus | null>(null);
   const [oauthLoading, setOauthLoading] = useState(false);
   const [cliModels, setCliModels] = useState<Record<string, CliModelInfo[]>>({});
@@ -107,7 +113,59 @@ export default function AgentDetail({
     }
     return CODEX_REASONING_FALLBACK_OPTIONS;
   }, [selectedCli, selectedCliModelMeta]);
-  const canSaveCli = requiresApiProvider ? false : !requiresOAuthAccount || Boolean(selectedOAuthAccountId);
+  const selectedApiProvider = apiProviders.find((provider) => provider.id === selectedApiProviderId && provider.enabled);
+  const canSaveCli = Boolean(selectedCli) && (requiresApiProvider
+    ? Boolean(selectedApiProvider && selectedApiModel.trim() && !apiLoading)
+    : !requiresOAuthAccount || Boolean(selectedOAuthAccountId));
+
+  useEffect(() => {
+    setInstructionDraft(agent.personality ?? "");
+    setConfigError("");
+  }, [agent.id, agent.personality]);
+
+  useEffect(() => {
+    if (!editingCli || !requiresApiProvider) return;
+    let cancelled = false;
+    setConfigError("");
+    api.getApiProviders().then((providers) => {
+      if (!cancelled) setApiProviders(providers.filter((provider) => provider.enabled));
+    }).catch(() => {
+      if (!cancelled) setConfigError("Não foi possível carregar os provedores de API.");
+    });
+    return () => { cancelled = true; };
+  }, [editingCli, requiresApiProvider]);
+
+  useEffect(() => {
+    setApiModels([]);
+    setApiLoading(false);
+    if (!editingCli || !requiresApiProvider || !selectedApiProviderId) return;
+    let cancelled = false;
+    setApiLoading(true);
+    api.getApiProviderModels(selectedApiProviderId).then((result) => {
+      if (!cancelled) {
+        setApiModels(result.models ?? []);
+        if (!result.ok) setConfigError("Lista de modelos indisponível. Verifique a conexão em Configurações.");
+      }
+    }).catch(() => {
+      if (!cancelled) setConfigError("Lista de modelos indisponível. Verifique a conexão em Configurações.");
+    }).finally(() => {
+      if (!cancelled) setApiLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, [editingCli, requiresApiProvider, selectedApiProviderId]);
+
+  const handleSaveInstructions = async () => {
+    setSavingInstructions(true);
+    setConfigError("");
+    try {
+      await api.updateAgent(agent.id, { personality: instructionDraft.trim() || null });
+      onAgentUpdated?.();
+    } catch {
+      setConfigError("Não foi possível salvar as instruções.");
+    } finally {
+      setSavingInstructions(false);
+    }
+  };
   const getReasoningDescription = useCallback(
     (effort: string, fallback?: string) => {
       switch (effort) {
@@ -131,8 +189,6 @@ export default function AgentDetail({
     [t],
   );
 
-  const xpLevel = Math.floor(agent.stats_xp / 100) + 1;
-  const xpProgress = agent.stats_xp % 100;
 
   useEffect(() => {
     setSelectedCli(agent.cli_provider);
@@ -212,6 +268,7 @@ export default function AgentDetail({
 
   const handleSaveCli = useCallback(async () => {
     setSavingCli(true);
+    setConfigError("");
     try {
       await api.updateAgent(agent.id, {
         cli_provider: selectedCli,
@@ -225,6 +282,7 @@ export default function AgentDetail({
       setEditingCli(false);
     } catch (error) {
       console.error("Failed to update CLI:", error);
+      setConfigError("Não foi possível salvar o provedor e o modelo.");
     } finally {
       setSavingCli(false);
     }
@@ -355,7 +413,7 @@ export default function AgentDetail({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className="w-[calc(100vw-1.5rem)] max-w-[480px] max-h-[85vh] overflow-hidden rounded-2xl border border-slate-700 bg-slate-800 shadow-2xl">
+      <div className="w-[calc(100vw-1.5rem)] max-w-[560px] max-h-[92dvh] flex flex-col overflow-hidden rounded-2xl border border-slate-700 bg-slate-800 shadow-2xl">
         <div
           className="relative px-6 py-5 border-b border-slate-700"
           style={{
@@ -434,7 +492,7 @@ export default function AgentDetail({
                       <div className="flex w-full min-w-0 items-center gap-1 pb-0.5">
                         <span className="shrink-0">🔧</span>
                         <select
-                          value={selectedCli}
+                          value={selectedCli ?? ""}
                           onChange={(event) => {
                             setSelectedCli(event.target.value as Agent["cli_provider"]);
                             setSelectedCliModel("");
@@ -442,6 +500,7 @@ export default function AgentDetail({
                           }}
                           className="w-[94px] shrink-0 bg-slate-700 text-slate-200 text-xs rounded px-1 py-0.5 border border-slate-600 focus:outline-none focus:border-blue-500"
                         >
+                          <option value="" disabled>Sem provedor configurado</option>
                           {Object.entries(CLI_LABELS).map(([key, label]) => (
                             <option key={key} value={key}>
                               {label}
@@ -549,7 +608,7 @@ export default function AgentDetail({
                     <div className="flex flex-wrap items-center gap-1">
                       <span>🔧</span>
                       <select
-                        value={selectedCli}
+                        value={selectedCli ?? ""}
                         onChange={(event) => {
                           setSelectedCli(event.target.value as Agent["cli_provider"]);
                           setSelectedCliModel("");
@@ -557,7 +616,8 @@ export default function AgentDetail({
                         }}
                         className="bg-slate-700 text-slate-200 text-xs rounded px-1.5 py-0.5 border border-slate-600 focus:outline-none focus:border-blue-500"
                       >
-                        {Object.entries(CLI_LABELS).map(([key, label]) => (
+                        <option value="" disabled>Sem provedor configurado</option>
+                          {Object.entries(CLI_LABELS).map(([key, label]) => (
                           <option key={key} value={key}>
                             {label}
                           </option>
@@ -596,14 +656,43 @@ export default function AgentDetail({
                           </span>
                         ))}
                       {requiresApiProvider && (
-                        <span className="text-[10px] text-amber-300">
-                          {t({
-                            ko: "⚙️ 설정 > API 탭에서 모델을 배정하세요",
-                            en: "⚙️ Assign models in Settings > API tab",
-                            ja: "⚙️ 設定 > API タブでモデルを割り当ててください",
-                            zh: "⚙️ 请在设置 > API 标签页中分配模型",
-                          })}
-                        </span>
+                        <div className="w-full space-y-1.5">
+                          <label className="block">Provedor de API</label>
+                          <select
+                            aria-label="Provedor de API"
+                            value={selectedApiProviderId}
+                            onChange={(event) => {
+                              setSelectedApiProviderId(event.target.value);
+                              setSelectedApiModel("");
+                              setConfigError("");
+                            }}
+                            className="w-full bg-slate-700 text-slate-200 rounded px-2 py-1 border border-slate-600"
+                          >
+                            <option value="">Selecione um provedor</option>
+                            {apiProviders.map((provider) => (
+                              <option key={provider.id} value={provider.id}>{provider.name} ({provider.type})</option>
+                            ))}
+                          </select>
+                          {apiProviders.length === 0 && (
+                            <p className="text-amber-300">Cadastre o OpenRouter em Configurações &gt; API.</p>
+                          )}
+                          {selectedApiProviderId && (
+                            <>
+                              <label className="block">Modelo</label>
+                              <input
+                                aria-label="Modelo de API"
+                                list="agent-api-models"
+                                value={selectedApiModel}
+                                onChange={(event) => setSelectedApiModel(event.target.value)}
+                                placeholder={apiLoading ? "Carregando modelos..." : "Identificador do modelo"}
+                                className="w-full bg-slate-700 text-slate-200 rounded px-2 py-1 border border-slate-600"
+                              />
+                              <datalist id="agent-api-models">
+                                {apiModels.map((model) => <option key={model} value={model} />)}
+                              </datalist>
+                            </>
+                          )}
+                        </div>
                       )}
                       {supportsCliModelOverride &&
                         (cliModelsLoading ? (
@@ -686,8 +775,8 @@ export default function AgentDetail({
                       zh: "点击更改 CLI",
                     })}
                   >
-                    🔧{" "}
-                    {agent.cli_provider === "api" && agent.api_model
+                    {"Modelo: "}
+                    {!agent.cli_provider ? "Não configurado" : agent.cli_provider === "api" && agent.api_model
                       ? `API: ${agent.api_model}`
                       : agent.cli_model &&
                           CLI_MODEL_OVERRIDE_PROVIDERS.includes(agent.cli_provider) &&
@@ -703,15 +792,10 @@ export default function AgentDetail({
             </div>
           </div>
 
-          <div className="mt-3 flex items-center gap-2">
-            <span className="text-xs text-yellow-400 font-bold">Lv.{xpLevel}</span>
-            <div className="flex-1 h-1.5 bg-slate-700 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-gradient-to-r from-yellow-500 to-amber-400 rounded-full transition-all"
-                style={{ width: `${xpProgress}%` }}
-              />
-            </div>
-            <span className="text-[10px] text-slate-500">{agent.stats_xp} XP</span>
+          <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-slate-700 pt-3 text-xs text-slate-400">
+            <span>{agentTasks.filter((task) => task.status === "in_progress").length} em execução</span>
+            <span>{agentTasks.filter((task) => task.status === "pending").length} pendentes</span>
+            <span>{agent.stats_tasks_done} concluídas</span>
           </div>
         </div>
 
@@ -739,7 +823,22 @@ export default function AgentDetail({
           ))}
         </div>
 
-        <div className="p-4 overflow-y-auto max-h-[40vh]">
+        <div className="p-4 overflow-y-auto min-h-0 flex-1">
+          {configError && <p role="alert" className="mb-3 text-xs text-red-300">{configError}</p>}
+          {tab === "info" && (
+            <section className="mb-4 space-y-2 rounded-lg border border-slate-600 p-3">
+              <label htmlFor="agent-instructions" className="block text-xs font-semibold text-slate-200">Instruções individuais</label>
+              <textarea id="agent-instructions" rows={4} value={instructionDraft}
+                onChange={(event) => setInstructionDraft(event.target.value)}
+                placeholder="Defina as instruções quando estiver pronto."
+                className="w-full rounded bg-slate-700 p-2 text-sm text-slate-100" />
+              <button type="button" disabled={savingInstructions || instructionDraft === (agent.personality ?? "")}
+                onClick={() => void handleSaveInstructions()}
+                className="rounded bg-blue-600 px-3 py-1.5 text-xs text-white disabled:opacity-50">
+                {savingInstructions ? "Salvando..." : "Salvar instruções"}
+              </button>
+            </section>
+          )}
           <AgentDetailTabContent
             tab={tab}
             t={t}

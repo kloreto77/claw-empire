@@ -1,145 +1,48 @@
 import { type Container, Graphics } from "pixi.js";
-import { DESK_H, DESK_W, TARGET_CHAR_H } from "./model";
+import { DESK_H, DESK_W } from "./model";
 import { blendColor } from "./drawing-core";
 import { OFFICE_PASTEL } from "./themes-locale";
 
 function drawDesk(parent: Container, dx: number, dy: number, working: boolean): Graphics {
   const g = new Graphics();
-  // Shadow (softer, multi-layer)
-  g.ellipse(dx + DESK_W / 2, dy + DESK_H + 4, DESK_W / 2 + 6, 6).fill({ color: 0x000000, alpha: 0.06 });
-  g.ellipse(dx + DESK_W / 2, dy + DESK_H + 3, DESK_W / 2 + 4, 5).fill({ color: 0x000000, alpha: 0.1 });
-  g.ellipse(dx + DESK_W / 2, dy + DESK_H + 2, DESK_W / 2 + 2, 3.5).fill({ color: 0x000000, alpha: 0.12 });
-  // Desk legs (subtle, peeking below)
-  g.roundRect(dx + 3, dy + DESK_H - 2, 3, 6, 1).fill(0xb89060);
-  g.roundRect(dx + DESK_W - 6, dy + DESK_H - 2, 3, 6, 1).fill(0xb89060);
-  // Desk body (warm wood grain with richer layering)
-  g.roundRect(dx, dy, DESK_W, DESK_H, 3).fill(0xbe9860);
-  g.roundRect(dx + 1, dy + 1, DESK_W - 2, DESK_H - 2, 2).fill(0xd4b478);
-  g.roundRect(dx + 2, dy + 2, DESK_W - 4, DESK_H - 4, 1.5).fill(0xe0c490);
-  // Subtle desk-top gradient (warm highlight)
-  g.roundRect(dx + 2, dy + 2, DESK_W - 4, 6, 1).fill({ color: 0xf5dca0, alpha: 0.25 });
-  // Wood grain lines (warm, varied width)
-  for (let i = 0; i < 4; i++) {
-    const w = 0.25 + (i % 2) * 0.1;
-    g.moveTo(dx + 4, dy + 5 + i * 5.5)
-      .lineTo(dx + DESK_W - 4, dy + 5 + i * 5.5)
-      .stroke({ width: w, color: 0xc4a060, alpha: 0.2 });
+  const edge = 0x253541;
+  const surface = 0x61717f;
+  const screen = 0x101b25;
+  const indicator = working ? 0x62c6a6 : 0x71818e;
+  g.ellipse(dx + DESK_W / 2, dy + DESK_H + 3, DESK_W / 2, 4).fill({ color: 0x000000, alpha: 0.15 });
+  for (const x of [dx + 4, dx + DESK_W - 7]) {
+    g.roundRect(x, dy + DESK_H - 2, 3, 5, 1).fill(edge);
   }
-  // Desk edge highlight (warmer, with bottom shadow)
-  g.moveTo(dx + 2, dy + 1)
-    .lineTo(dx + DESK_W - 2, dy + 1)
-    .stroke({ width: 0.6, color: 0xf0d890, alpha: 0.45 });
-  g.moveTo(dx + 2, dy + DESK_H - 1)
-    .lineTo(dx + DESK_W - 2, dy + DESK_H - 1)
-    .stroke({ width: 0.5, color: 0xa88050, alpha: 0.2 });
-  // ── Keyboard at TOP (closest to character above) ──
-  g.roundRect(dx + DESK_W / 2 - 10, dy + 2, 20, 7, 1.5).fill(0x788498);
-  g.roundRect(dx + DESK_W / 2 - 10, dy + 2, 20, 7, 1.5).stroke({ width: 0.3, color: 0x5c6a80, alpha: 0.5 });
-  // Keyboard highlight
-  g.moveTo(dx + DESK_W / 2 - 8, dy + 2.5)
-    .lineTo(dx + DESK_W / 2 + 8, dy + 2.5)
-    .stroke({ width: 0.4, color: 0xffffff, alpha: 0.1 });
-  for (let r = 0; r < 2; r++) {
-    for (let c = 0; c < 6; c++) {
-      g.roundRect(dx + DESK_W / 2 - 8 + c * 2.8, dy + 3.2 + r * 2.6, 2, 1.6, 0.3).fill(0xd4d9e6);
+  g.roundRect(dx, dy, DESK_W, DESK_H, 2).fill(edge);
+  g.roundRect(dx + 1, dy + 1, DESK_W - 2, DESK_H - 3, 1).fill(surface);
+  g.moveTo(dx + 2, dy + 1).lineTo(dx + DESK_W - 2, dy + 1).stroke({ color: 0xb3c1ca, width: 0.5, alpha: 0.65 });
+
+  // Two compact workstation displays. The glyphs indicate activity, not market prices.
+  const monitorW = (DESK_W - 8) / 2;
+  for (let index = 0; index < 2; index++) {
+    const mx = dx + 3 + index * (monitorW + 2);
+    const my = dy + DESK_H - 15;
+    g.roundRect(mx + monitorW / 2 - 4, my - 3, 8, 3, 1).fill(edge);
+    g.roundRect(mx, my, monitorW, 13, 1.5).fill(0x18232d);
+    g.roundRect(mx, my, monitorW, 13, 1.5).stroke({ color: 0x90a0ae, width: 0.45, alpha: 0.8 });
+    g.roundRect(mx + 1.5, my + 1.5, monitorW - 3, 9.5, 0.5).fill(screen);
+    if (working) {
+      for (let row = 0; row < 3; row++) {
+        const lineWidth = (monitorW - 6) * (row === 1 ? 0.6 : 0.9);
+        g.rect(mx + 3, my + 3 + row * 2.4, lineWidth, 0.8).fill({ color: index === 0 ? 0x75b7ca : indicator, alpha: 0.8 });
+      }
+    }
+    g.circle(mx + monitorW - 2.5, my + 11.5, 0.65).fill(indicator);
+  }
+  // Keyboard and pointing device.
+  const kx = dx + DESK_W / 2 - 10;
+  g.roundRect(kx, dy + 2, 20, 6, 1).fill(0x253541);
+  for (let row = 0; row < 2; row++) {
+    for (let col = 0; col < 7; col++) {
+      g.rect(kx + 1.5 + col * 2.5, dy + 3 + row * 2, 1.5, 1).fill(0x8e9eab);
     }
   }
-  // Spacebar
-  g.roundRect(dx + DESK_W / 2 - 5, dy + 3.2 + 5.2, 10, 1.4, 0.3).fill(0xd4d9e6);
-  // Paper stack (left, with slight rotation feel)
-  g.ellipse(dx + 7, dy + 14, 6, 2).fill({ color: OFFICE_PASTEL.cocoa, alpha: 0.06 });
-  g.rect(dx + 3, dy + 3, 9, 10).fill(0xf0e8dc);
-  g.rect(dx + 3.5, dy + 2.5, 8.5, 10).fill(0xf4ede3);
-  g.rect(dx + 4, dy + 2, 9, 10.5).fill(0xfffbf4);
-  // Text lines on paper (more detailed)
-  for (let i = 0; i < 4; i++) {
-    const lw = 3 + ((i * 1.7) % 4);
-    g.moveTo(dx + 5, dy + 4 + i * 2.2)
-      .lineTo(dx + 5 + lw, dy + 4 + i * 2.2)
-      .stroke({ width: 0.35, color: 0xb0a898, alpha: 0.3 + (i % 2) * 0.1 });
-  }
-  // Paper clip on paper
-  g.moveTo(dx + 11, dy + 3)
-    .lineTo(dx + 11, dy + 7)
-    .stroke({ width: 0.5, color: 0xaaaaaa, alpha: 0.5 });
-  g.moveTo(dx + 11, dy + 3)
-    .quadraticCurveTo(dx + 13, dy + 3, dx + 13, dy + 5)
-    .stroke({ width: 0.5, color: 0xaaaaaa, alpha: 0.5 });
-  // Coffee mug (dusty rose accent, with steam)
-  g.ellipse(dx + DESK_W - 8, dy + 8.5, 4.5, 1.8).fill({ color: OFFICE_PASTEL.cocoa, alpha: 0.07 });
-  g.circle(dx + DESK_W - 8, dy + 7, 4.2).fill(0xf0dee5);
-  g.circle(dx + DESK_W - 8, dy + 7, 4.2).stroke({ width: 0.5, color: 0xc5a0b0 });
-  g.circle(dx + DESK_W - 8, dy + 7, 2.8).fill(0x8a6248);
-  // Mug inner rim highlight
-  g.circle(dx + DESK_W - 8, dy + 7, 2.8).stroke({ width: 0.3, color: 0xa07050, alpha: 0.4 });
-  // Mug handle
-  g.moveTo(dx + DESK_W - 3.8, dy + 5.5)
-    .quadraticCurveTo(dx + DESK_W - 1.5, dy + 7, dx + DESK_W - 3.8, dy + 8.5)
-    .stroke({ width: 0.9, color: 0xd7c0c9 });
-  // Tiny steam wisps above mug
-  g.moveTo(dx + DESK_W - 9, dy + 3)
-    .quadraticCurveTo(dx + DESK_W - 10, dy + 1, dx + DESK_W - 9, dy - 0.5)
-    .stroke({ width: 0.4, color: 0xcccccc, alpha: 0.2 });
-  g.moveTo(dx + DESK_W - 7, dy + 3)
-    .quadraticCurveTo(dx + DESK_W - 6, dy + 1, dx + DESK_W - 7, dy - 0.5)
-    .stroke({ width: 0.4, color: 0xcccccc, alpha: 0.15 });
-  // ── Monitor at BOTTOM (character looks down at it) ──
-  const mx = dx + DESK_W / 2 - 10;
-  const my = dy + DESK_H - 16;
-  // Monitor shadow
-  g.ellipse(mx + 10, my + 13, 11, 2.5).fill({ color: OFFICE_PASTEL.cocoa, alpha: 0.07 });
-  // Monitor bezel
-  g.roundRect(mx, my, 20, 13, 2).fill(0x3e4858);
-  g.roundRect(mx, my, 20, 13, 2).stroke({ width: 0.6, color: 0x5a6678 });
-  // Screen
-  g.roundRect(mx + 1.5, my + 1, 17, 10, 1).fill(working ? 0x89c8b9 : 0x1e2836);
-  if (working) {
-    // Code lines on screen (colorful IDE look)
-    const codeColors = [0xe1fff8, 0xf8d876, 0xa8d8ea, 0xf0b8c8];
-    for (let i = 0; i < 4; i++) {
-      const lineW = 3 + ((i * 2.3) % 7);
-      const indent = i === 2 ? 2 : 0;
-      g.moveTo(mx + 3.5 + indent, my + 2.5 + i * 2.2)
-        .lineTo(mx + 3.5 + indent + lineW, my + 2.5 + i * 2.2)
-        .stroke({ width: 0.7, color: codeColors[i % codeColors.length], alpha: 0.6 });
-    }
-    // Cursor blink line
-    g.rect(mx + 4, my + 2.5, 0.5, 1.5).fill({ color: 0xffffff, alpha: 0.5 });
-    // Screen glow on desk
-    g.ellipse(mx + 10, my + 15, 12, 3).fill({ color: 0xa3ded1, alpha: 0.06 });
-  } else {
-    // Screensaver: tiny stars on dark screen
-    g.circle(mx + 5, my + 4, 0.5).fill({ color: 0xffffff, alpha: 0.15 });
-    g.circle(mx + 13, my + 6, 0.4).fill({ color: 0xffffff, alpha: 0.12 });
-    g.circle(mx + 9, my + 8, 0.3).fill({ color: 0xffffff, alpha: 0.1 });
-  }
-  // Monitor webcam dot
-  g.circle(mx + 10, my + 0.5, 0.6).fill({ color: 0x44dd66, alpha: 0.3 });
-  // Monitor stand (slimmer, modern)
-  g.rect(mx + 8, my - 2.5, 4, 3).fill(0x4e5a70);
-  g.roundRect(mx + 5, my - 4, 10, 2, 1).fill(0x5e6a82);
-  g.roundRect(mx + 5, my - 4, 10, 1, 1).fill({ color: 0x7a88a0, alpha: 0.3 });
-  // Pencil holder (right of monitor, cuter)
-  g.roundRect(dx + DESK_W - 7, dy + DESK_H - 11, 5, 7, 1.5).fill(0x9ab8c8);
-  g.roundRect(dx + DESK_W - 7, dy + DESK_H - 11, 5, 7, 1.5).stroke({ width: 0.3, color: 0x7a9aac, alpha: 0.4 });
-  // Pencils (varied colors)
-  g.rect(dx + DESK_W - 6.5, dy + DESK_H - 15, 1, 5).fill(0xffcb76);
-  g.rect(dx + DESK_W - 5.5, dy + DESK_H - 14, 1, 4).fill(0xd5a5ae);
-  g.rect(dx + DESK_W - 4.5, dy + DESK_H - 13.5, 1, 3.5).fill(0x8abfd0);
-  // Sticky notes near monitor (stack of 2 colors)
-  g.roundRect(mx + 15, my + 1, 4, 4, 0.5).fill(0xf8dea8);
-  g.roundRect(mx + 15.5, my + 0.5, 3.5, 3.5, 0.5).fill(0xfce8c0);
-  g.moveTo(mx + 16, my + 2.5)
-    .lineTo(mx + 18, my + 2.5)
-    .stroke({ width: 0.3, color: 0xa5804f, alpha: 0.4 });
-  g.moveTo(mx + 16, my + 3.5)
-    .lineTo(mx + 17.5, my + 3.5)
-    .stroke({ width: 0.3, color: 0xa5804f, alpha: 0.3 });
-  // Tiny succulent on desk corner
-  g.circle(dx + 3, dy + DESK_H - 4, 2.5).fill(0x7cb898);
-  g.circle(dx + 2, dy + DESK_H - 5, 1.8).fill(0x92c8aa);
-  g.circle(dx + 4, dy + DESK_H - 5, 1.5).fill(0x9dd9c2);
-  g.roundRect(dx + 1, dy + DESK_H - 2, 4, 2.5, 0.8).fill(0xd88060);
+  g.roundRect(kx + 23, dy + 2, 4, 6, 1.5).fill(0x2c3d49);
   parent.addChild(g);
   return g;
 }

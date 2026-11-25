@@ -4,60 +4,60 @@ import type { MeetingReviewDecision } from "../../types";
 import type { RoomTheme } from "./model";
 
 const OFFICE_PASTEL_LIGHT = {
-  creamWhite: 0xf8f3ec,
-  creamDeep: 0xebdfcf,
-  softMint: 0xbfded5,
-  softMintDeep: 0x8fbcb0,
-  dustyRose: 0xd5a5ae,
-  dustyRoseDeep: 0xb67d89,
-  warmSand: 0xd6b996,
-  warmWood: 0xb8906d,
-  cocoa: 0x6f4d3a,
-  ink: 0x2f2530,
-  slate: 0x586378,
+  creamWhite: 0xf1f4f6,
+  creamDeep: 0xdce3e8,
+  softMint: 0xd6e3e6,
+  softMintDeep: 0x9eafb7,
+  dustyRose: 0xc9d2dc,
+  dustyRoseDeep: 0x8798a8,
+  warmSand: 0xbdc7cf,
+  warmWood: 0x8b9ba8,
+  cocoa: 0x415465,
+  ink: 0x233344,
+  slate: 0x546879,
 };
 
 /* ── Dark (late-night coding session) palette ── */
 const OFFICE_PASTEL_DARK = {
-  creamWhite: 0x0e1020,
-  creamDeep: 0x0c0e1e,
-  softMint: 0x122030,
-  softMintDeep: 0x0e1a28,
-  dustyRose: 0x201020,
-  dustyRoseDeep: 0x1a0c1a,
-  warmSand: 0x1a1810,
-  warmWood: 0x16130c,
-  cocoa: 0x140f08,
-  ink: 0xc8cee0,
-  slate: 0x7888a8,
+  creamWhite: 0x111b25,
+  creamDeep: 0x0e1720,
+  softMint: 0x1a2b36,
+  softMintDeep: 0x16242e,
+  dustyRose: 0x1c2a39,
+  dustyRoseDeep: 0x172330,
+  warmSand: 0x24323d,
+  warmWood: 0x1c2933,
+  cocoa: 0x121e27,
+  ink: 0xe0e8ef,
+  slate: 0x96a9bb,
 };
 
 let OFFICE_PASTEL = OFFICE_PASTEL_LIGHT;
 
 const DEFAULT_CEO_THEME_LIGHT: RoomTheme = {
-  floor1: 0xe5d9b9,
-  floor2: 0xdfd0a8,
-  wall: 0x998243,
-  accent: 0xa77d0c,
+  floor1: 0xe1e7ec,
+  floor2: 0xdce3e9,
+  wall: 0x8294a4,
+  accent: 0x327e82,
 };
 const DEFAULT_CEO_THEME_DARK: RoomTheme = {
-  floor1: 0x101020,
-  floor2: 0x0e0e1c,
-  wall: 0x2a2450,
-  accent: 0x584818,
+  floor1: 0x17232e,
+  floor2: 0x14202b,
+  wall: 0x354b5b,
+  accent: 0x45a6a0,
 };
 
 const DEFAULT_BREAK_THEME_LIGHT: RoomTheme = {
-  floor1: 0xf7e2b7,
-  floor2: 0xf6dead,
-  wall: 0xa99c83,
-  accent: 0xf0c878,
+  floor1: 0xe7ebef,
+  floor2: 0xe0e5eb,
+  wall: 0x8a9ba9,
+  accent: 0x668ca0,
 };
 const DEFAULT_BREAK_THEME_DARK: RoomTheme = {
-  floor1: 0x141210,
-  floor2: 0x10100e,
-  wall: 0x302a20,
-  accent: 0x4a3c18,
+  floor1: 0x16212b,
+  floor2: 0x131e28,
+  wall: 0x344653,
+  accent: 0x668ca0,
 };
 
 let DEFAULT_CEO_THEME = DEFAULT_CEO_THEME_LIGHT;
@@ -409,20 +409,20 @@ const BREAK_SPOTS = [
 ];
 
 const DEPT_THEME_LIGHT: Record<string, RoomTheme> = {
-  dev: { floor1: 0xd8e8f5, floor2: 0xcce1f2, wall: 0x6c96b7, accent: 0x5a9fd4 },
-  design: { floor1: 0xe8def2, floor2: 0xe1d4ee, wall: 0x9378ad, accent: 0x9a6fc4 },
-  planning: { floor1: 0xf0e1c5, floor2: 0xeddaba, wall: 0xae9871, accent: 0xd4a85a },
-  operations: { floor1: 0xd0eede, floor2: 0xc4ead5, wall: 0x6eaa89, accent: 0x5ac48a },
-  qa: { floor1: 0xf0cbcb, floor2: 0xedc0c0, wall: 0xae7979, accent: 0xd46a6a },
-  devsecops: { floor1: 0xf0d5c5, floor2: 0xedcdba, wall: 0xae8871, accent: 0xd4885a },
+  dev: { floor1: 0xe2e8ed, floor2: 0xdde4ea, wall: 0x8598a8, accent: 0x497f9e },
+  design: { floor1: 0xe2e8ed, floor2: 0xdde4ea, wall: 0x8598a8, accent: 0x71869a },
+  planning: { floor1: 0xe2e8ed, floor2: 0xdde4ea, wall: 0x8598a8, accent: 0x657e94 },
+  operations: { floor1: 0xe2e8ed, floor2: 0xdde4ea, wall: 0x8598a8, accent: 0x387f80 },
+  qa: { floor1: 0xe2e8ed, floor2: 0xdde4ea, wall: 0x8598a8, accent: 0x7f8498 },
+  devsecops: { floor1: 0xe2e8ed, floor2: 0xdde4ea, wall: 0x8598a8, accent: 0x647f94 },
 };
 const DEPT_THEME_DARK: Record<string, RoomTheme> = {
-  dev: { floor1: 0x0c1620, floor2: 0x0a121c, wall: 0x1e3050, accent: 0x285890 },
-  design: { floor1: 0x120c20, floor2: 0x100a1e, wall: 0x2c1c50, accent: 0x482888 },
-  planning: { floor1: 0x18140c, floor2: 0x16120a, wall: 0x3a2c1c, accent: 0x785828 },
-  operations: { floor1: 0x0c1a18, floor2: 0x0a1614, wall: 0x1c4030, accent: 0x287848 },
-  qa: { floor1: 0x1a0c10, floor2: 0x180a0e, wall: 0x401c1c, accent: 0x782828 },
-  devsecops: { floor1: 0x18100c, floor2: 0x160e0a, wall: 0x3a241c, accent: 0x783828 },
+  dev: { floor1: 0x172430, floor2: 0x15212c, wall: 0x334a5c, accent: 0x4b88b0 },
+  design: { floor1: 0x172430, floor2: 0x15212c, wall: 0x334a5c, accent: 0x768ba7 },
+  planning: { floor1: 0x172430, floor2: 0x15212c, wall: 0x334a5c, accent: 0x6d8ba2 },
+  operations: { floor1: 0x172430, floor2: 0x15212c, wall: 0x334a5c, accent: 0x45a6a0 },
+  qa: { floor1: 0x172430, floor2: 0x15212c, wall: 0x334a5c, accent: 0x8c90a6 },
+  devsecops: { floor1: 0x172430, floor2: 0x15212c, wall: 0x334a5c, accent: 0x7194ac },
 };
 let DEPT_THEME = DEPT_THEME_LIGHT;
 
