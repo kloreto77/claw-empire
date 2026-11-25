@@ -189,8 +189,6 @@ export default function AgentDetail({
     [t],
   );
 
-  const xpLevel = Math.floor(agent.stats_xp / 100) + 1;
-  const xpProgress = agent.stats_xp % 100;
 
   useEffect(() => {
     setSelectedCli(agent.cli_provider);
@@ -794,15 +792,10 @@ export default function AgentDetail({
             </div>
           </div>
 
-          <div className="mt-3 flex items-center gap-2">
-            <span className="text-xs text-yellow-400 font-bold">Lv.{xpLevel}</span>
-            <div className="flex-1 h-1.5 bg-slate-700 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-gradient-to-r from-yellow-500 to-amber-400 rounded-full transition-all"
-                style={{ width: `${xpProgress}%` }}
-              />
-            </div>
-            <span className="text-[10px] text-slate-500">{agent.stats_xp} XP</span>
+          <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-slate-700 pt-3 text-xs text-slate-400">
+            <span>{agentTasks.filter((task) => task.status === "in_progress").length} em execução</span>
+            <span>{agentTasks.filter((task) => task.status === "pending").length} pendentes</span>
+            <span>{agent.stats_tasks_done} concluídas</span>
           </div>
         </div>
 
