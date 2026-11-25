@@ -7,6 +7,7 @@ const net = require("node:net");
 const { pathToFileURL } = require("node:url");
 
 const smoke = process.argv.includes("--mesa-smoke-test");
+const updateSmoke = smoke && process.argv.includes("--mesa-update-test");
 let child;
 let window;
 let quitting = false;
@@ -32,7 +33,6 @@ function report(message) {
 report("Desktop main started: " + app.getVersion());
 process.on("uncaughtException", (error) => fail(error));
 process.on("unhandledRejection", (error) => fail(error instanceof Error ? error : new Error(String(error))));
-
 
 function reservePort() {
   return new Promise((resolve, reject) => {
@@ -100,8 +100,7 @@ async function startBackend() {
   try {
     child = spawn(
       path.join(runtime, "node.exe"),
-      ["--import", pathToFileURL(loader).href,
-        path.join(runtime, "desktop-backend.mjs")],
+      ["--import", pathToFileURL(loader).href, path.join(runtime, "desktop-backend.mjs")],
       { cwd: data, env, windowsHide: true, stdio: ["ignore", fd, fd, "ipc"] },
     );
   } finally {
@@ -155,7 +154,9 @@ function setupMenu() {
             click: (item) => app.setLoginItemSettings({ openAtLogin: item.checked }),
           },
           {
-            label: updateReady ? "Atualização pronta — instalar ao fechar sem tarefas ativas" : "Verificar atualizações",
+            label: updateReady
+              ? "Atualização pronta — instalar ao fechar sem tarefas ativas"
+              : "Verificar atualizações",
             click: () => {
               if (!updateReady) void checkUpdates(true);
             },
@@ -179,6 +180,7 @@ async function checkUpdates(manual = false) {
     }
   } catch (error) {
     report("Update check: " + String(error));
+    if (updateSmoke) fail(error);
     if (manual) await dialog.showMessageBox({ message: "Não foi possível verificar atualizações agora." });
   } finally {
     checkingUpdate = false;
@@ -186,9 +188,14 @@ async function checkUpdates(manual = false) {
 }
 
 function configureUpdates() {
-  if (!app.isPackaged || smoke) return;
+  if (!app.isPackaged || (smoke && !updateSmoke)) return;
   try {
     updater = require("electron-updater").autoUpdater;
+    if (updateSmoke) {
+      const feed = new URL(process.env.MESA_UPDATE_TEST_FEED);
+      if (feed.protocol !== "http:" || feed.hostname !== "127.0.0.1") throw new Error("Invalid test feed");
+      updater.setFeedURL({ provider: "generic", url: feed.href });
+    }
     updater.autoDownload = true;
     updater.autoInstallOnAppQuit = false;
     updater.allowPrerelease = false;
@@ -198,11 +205,13 @@ function configureUpdates() {
       updateReady = true;
       report("Update ready; waiting for clean idle shutdown.");
       setupMenu();
+      if (updateSmoke) shutdown();
     });
     void checkUpdates();
     setInterval(() => void checkUpdates(), 60 * 60 * 1000).unref();
   } catch (error) {
     report("Updater initialization: " + String(error));
+    if (updateSmoke) fail(error);
   }
 }
 
@@ -251,6 +260,20 @@ function fail(error) {
   shutdown(1);
 }
 
+function createUpdateBackup() {
+  const root = path.join(data, "update-backups");
+  fs.mkdirSync(root, { recursive: true });
+  const backup = fs.mkdtempSync(path.join(root, "before-"));
+  for (const file of ["mesa.sqlite", "encryption-key.txt", "desktop-settings.json"]) {
+    fs.copyFileSync(path.join(data, file), path.join(backup, file));
+  }
+  for (const suffix of ["-wal", "-shm"]) {
+    const file = "mesa.sqlite" + suffix;
+    if (fs.existsSync(path.join(data, file))) fs.copyFileSync(path.join(data, file), path.join(backup, file));
+  }
+  report("Pre-update backup completed.");
+}
+
 function shutdown(code = 0) {
   if (quitting) return;
   quitting = true;
@@ -265,13 +288,15 @@ function shutdown(code = 0) {
   }, 8000);
   child.once("exit", (backendCode) => {
     clearTimeout(timer);
-    if (code === 0 && backendCode === 0 && updateReady && cleanForUpdate && updater && !smoke) {
+    if (code === 0 && backendCode === 0 && updateReady && cleanForUpdate && updater && (!smoke || updateSmoke)) {
       report("Applying downloaded update after clean idle shutdown.");
       try {
+        createUpdateBackup();
         updater.quitAndInstall(true, false);
         return;
       } catch (error) {
         report("Update install failed: " + String(error));
+        if (updateSmoke) return app.exit(1);
       }
     }
     if (updateReady && !cleanForUpdate) report("Update deferred: backend was not confirmed idle.");
@@ -302,21 +327,26 @@ if (!app.requestSingleInstanceLock()) {
       shutdown();
     }
   });
-  app.whenReady().then(async () => {
-    const agents = await startBackend();
-    setupMenu();
-    await openWindow();
-    configureUpdates();
-    if (smoke) {
-      if (agents.length !== 8) throw new Error("Expected eight initial agents.");
-      let rendered = false;
-      for (let i = 0; i < 40 && !rendered; i++) {
-        rendered = await window.webContents.executeJavaScript("Boolean(document.querySelector('#root')?.childElementCount)");
-        if (!rendered) await new Promise((resolve) => setTimeout(resolve, 250));
+  app
+    .whenReady()
+    .then(async () => {
+      const agents = await startBackend();
+      setupMenu();
+      await openWindow();
+      if (smoke) {
+        if (agents.length !== 8) throw new Error("Expected eight initial agents.");
+        let rendered = false;
+        for (let i = 0; i < 40 && !rendered; i++) {
+          rendered = await window.webContents.executeJavaScript(
+            "Boolean(document.querySelector('#root')?.childElementCount)",
+          );
+          if (!rendered) await new Promise((resolve) => setTimeout(resolve, 250));
+        }
+        if (!rendered) throw new Error("UI did not render.");
+        report("Smoke test passed.");
+        if (!updateSmoke) return shutdown();
       }
-      if (!rendered) throw new Error("UI did not render.");
-      report("Smoke test passed.");
-      shutdown();
-    }
-  }).catch(fail);
+      configureUpdates();
+    })
+    .catch(fail);
 }

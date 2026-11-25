@@ -19,9 +19,11 @@ on:
 permissions:
   contents: read
 jobs:
+  quality:
+    uses: ./.github/workflows/ci.yml
   package:
     runs-on: windows-2025
-    timeout-minutes: 35
+    timeout-minutes: 55
     env:
       CSC_IDENTITY_AUTO_DISCOVERY: "false"
     steps:
@@ -59,7 +61,6 @@ jobs:
         run: npm install --no-audit --no-fund
       - name: Format desktop sources
         run: pnpm exec prettier --check desktop/main.cjs desktop/backend.mjs desktop/after-pack.cjs desktop/package.json .github/workflows/mesa-windows.yml
-        continue-on-error: true
       - name: Package Windows installer
         working-directory: desktop
         run: npx --no-install electron-builder --win nsis --x64 --publish never
@@ -101,6 +102,26 @@ jobs:
               Get-Content $_.FullName -Tail 100
             }
           }
+      - name: Build earlier version for update test
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $pkg = 'desktop/package.json'
+          $original = Get-Content $pkg -Raw
+          try {
+            node -e "const fs=require('fs'); const p='desktop/package.json'; const v=JSON.parse(fs.readFileSync(p)); v.version='2.0.0'; fs.writeFileSync(p,JSON.stringify(v,null,2))"
+            if ($LASTEXITCODE -ne 0) { throw 'Cannot prepare update fixture' }
+            Push-Location desktop
+            try {
+              npx --no-install electron-builder --win nsis --x64 --publish never --config.directories.output=../desktop-update-fixture
+              if ($LASTEXITCODE -ne 0) { throw 'Fixture packaging failed' }
+            } finally { Pop-Location }
+          } finally {
+            [IO.File]::WriteAllText((Join-Path $PWD $pkg), $original)
+          }
+      - name: Test installer and real version upgrade
+        shell: pwsh
+        run: ./desktop/test-update.ps1
       - name: Upload installer
         uses: actions/upload-artifact@v4
         with:
@@ -121,8 +142,8 @@ jobs:
             desktop/package-lock.json
           if-no-files-found: ignore
   publish:
-    if: github.event_name == 'workflow_dispatch' && inputs.publish_release && github.ref == 'refs/heads/mesa-operacoes-v2'
-    needs: package
+    if: github.ref == 'refs/heads/mesa-operacoes-v2' && (github.event_name == 'push' || inputs.publish_release)
+    needs: [quality, package]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -139,4 +160,8 @@ jobs:
           set -euo pipefail
           version="$(node -p "require('./desktop/package.json').version")"
           test -s desktop-release/latest.yml
+          if gh release view "v$version" >/dev/null 2>&1; then
+            echo "Version already released; increment desktop/package.json for another update."
+            exit 0
+          fi
           gh release create "v$version" desktop-release/Mesa-V2-Setup-*.exe desktop-release/Mesa-V2-Setup-*.exe.blockmap desktop-release/latest.yml --target "$GITHUB_SHA" --title "Mesa V2 Desktop $version" --notes "Windows x64. Build and desktop smoke test passed. Experimental unsigned installer."
