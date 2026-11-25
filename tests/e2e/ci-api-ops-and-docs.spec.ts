@@ -143,7 +143,7 @@ async function waitForTerminalMarker(
 test.describe("CI API ops and docs coverage", () => {
   test.setTimeout(120_000);
 
-  test("pause + inject + resume flow exposes interrupt control contract", async ({ request }) => {
+  test("pause + inject + resume rejects offline agents and preserves paused task", async ({ request }) => {
     const seed = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
     const deptId = `ci_pause_dept_${seed}`;
     const cleanup = {
@@ -286,31 +286,23 @@ test.describe("CI API ops and docs coverage", () => {
         "PATCH /api/agents/:id(status=offline)",
       );
 
-      const resumeRes = await expectOkJson<{
-        ok: boolean;
-        status: string;
-        auto_resumed: boolean;
-      }>(
-        await request.post(`/api/tasks/${taskId}/resume`, {
-          data: {
-            session_id: interruptProof.session_id,
-            interrupt_token: interruptProof.control_token,
-          },
-          headers: {
-            "x-csrf-token": csrfToken,
-          },
-        }),
-        "POST /api/tasks/:id/resume",
-      );
-      expect(resumeRes.ok).toBe(true);
-      expect(resumeRes.status).toBe("planned");
-      expect(resumeRes.auto_resumed).toBe(false);
+      const resumeRes = await request.post(`/api/tasks/${taskId}/resume`, {
+        data: {
+          session_id: interruptProof.session_id,
+          interrupt_token: interruptProof.control_token,
+        },
+        headers: {
+          "x-csrf-token": csrfToken,
+        },
+      });
+      expect(resumeRes.status()).toBe(409);
+      expect(await resumeRes.json()).toMatchObject({ error: "agent_busy_or_unavailable" });
 
       const taskAfterResume = await expectOkJson<TaskResponse>(
         await request.get(`/api/tasks/${taskId}`),
         "GET /api/tasks/:id",
       );
-      expect(taskAfterResume.task.status).toBe("planned");
+      expect(taskAfterResume.task.status).toBe("pending");
       expect(taskAfterResume.task.assigned_agent_id).toBe(agentId);
     } finally {
       await cleanupE2EResources(request, cleanup);
