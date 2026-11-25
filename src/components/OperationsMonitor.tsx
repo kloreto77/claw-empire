@@ -52,7 +52,7 @@ export default function OperationsMonitor({ agents, tasks, connected, onSelectAg
         <div>
           <h2 className="text-xl font-semibold" style={{ color: "var(--th-text-heading)" }}>Central de monitoramento</h2>
           <p className="mt-1 text-xs" style={{ color: "var(--th-text-muted)" }} role="status">
-            {connected ? "Servidor conectado · estados sincronizados" : "Servidor desconectado · dados podem estar desatualizados"}
+            {connected ? "Servidor conectado · monitoramento ativo" : "Servidor desconectado · dados podem estar desatualizados"}
           </p>
         </div>
         <button type="button" className="header-action-btn header-action-btn-secondary" onClick={onOpenTasks}>Ver operações</button>
@@ -86,7 +86,7 @@ export default function OperationsMonitor({ agents, tasks, connected, onSelectAg
           return (
             <article key={agent.id} className="min-w-0 rounded-lg border p-3" style={{ borderColor: "var(--th-border)", background: "var(--th-bg-surface)" }}>
               <div className="flex items-center gap-2">
-                <AgentAvatar agent={agent} size={36} rounded="lg" />
+                <AgentAvatar agent={agent} size={36} rounded="xl" />
                 <div className="min-w-0 flex-1">
                   <h4 className="truncate text-sm font-semibold">{agent.name}</h4>
                   <div className="flex items-center gap-1.5 text-xs">
