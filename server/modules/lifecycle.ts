@@ -452,8 +452,10 @@ export function startLifecycle(ctx: RuntimeContext): void {
   }
 
   // Run rotation every 60 seconds, and once on startup after 5s
-  setTimeout(rotateBreaks, 5_000);
-  setInterval(rotateBreaks, 60_000);
+  if (process.env.MESA_SIMULATE_BREAKS === "true") {
+    setTimeout(rotateBreaks, 5_000);
+    setInterval(rotateBreaks, 60_000);
+  }
   setTimeout(recoverInterruptedWorkflowOnStartup, 3_000);
   setInterval(() => recoverOrphanInProgressTasks("interval"), IN_PROGRESS_ORPHAN_SWEEP_MS);
   setInterval(() => recoverOrphanWorkingAgents("interval"), IN_PROGRESS_ORPHAN_SWEEP_MS);
