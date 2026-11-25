@@ -20,18 +20,13 @@ import {
   blendColor,
   contrastTextColor,
   drawAmbientGlow,
-  drawBunting,
   drawCeilingLight,
-  drawPictureFrame,
-  drawRug,
   drawRoomAtmosphere,
   drawTiledFloor,
-  drawTrashCan,
   drawWallClock,
   drawWindow,
 } from "./drawing-core";
-import { drawChair, drawDesk, drawPlant, drawWhiteboard } from "./drawing-furniture-a";
-import { drawBookshelf } from "./drawing-furniture-b";
+import { drawChair, drawDesk, drawPlant } from "./drawing-furniture-a";
 import { renderDeskAgentAndSubClones } from "./buildScene-department-agent";
 
 interface BuildDepartmentRoomsParams {
@@ -117,7 +112,7 @@ export function buildDepartmentRooms({
     doorG.rect(rx + roomW / 2 - 16, ry - 2, 32, 5).fill(0xf5f0e8);
     room.addChild(doorG);
 
-    const signW = 84;
+    const signW = Math.min(roomW - 20, 132);
     const signBg = new Graphics();
     signBg.roundRect(rx + roomW / 2 - signW / 2 + 1, ry - 3, signW, 18, 4).fill({ color: 0x000000, alpha: 0.12 });
     signBg.roundRect(rx + roomW / 2 - signW / 2, ry - 4, signW, 18, 4).fill(theme.accent);
@@ -126,7 +121,7 @@ export function buildDepartmentRooms({
     signBg.on("pointerdown", () => cbRef.current.onSelectDepartment(dept));
     room.addChild(signBg);
     const signTxt = new Text({
-      text: `${dept.icon || "🏢"} ${localeName(activeLocale, dept)}`,
+      text: localeName(activeLocale, dept),
       style: new TextStyle({
         fontSize: 9,
         fill: 0xffffff,
@@ -140,17 +135,6 @@ export function buildDepartmentRooms({
     room.addChild(signTxt);
 
     drawCeilingAndDecor(room, rx, ry, roomW, roomH, theme, deptIdx, wallClocksRef);
-
-    if (deptAgents.length > 0) {
-      drawRug(
-        room,
-        rx + roomW / 2,
-        ry + 38 + (Math.min(agentRows, 2) * SLOT_H) / 2,
-        roomW - 40,
-        Math.min(agentRows, 2) * SLOT_H - 10,
-        theme.accent,
-      );
-    }
 
     if (deptAgents.length === 0) {
       const emptyText = new Text({
@@ -178,7 +162,7 @@ export function buildDepartmentRooms({
       agentPosRef.current.set(agent.id, { x: ax, y: deskY });
 
       renderAgentHeader(room, ax, nameY, agent, theme.accent, unread, activeLocale);
-      drawChair(room, ax, charFeetY - TARGET_CHAR_H * 0.18, theme.accent);
+      drawChair(room, ax, charFeetY - TARGET_CHAR_H * 0.18, 0x536574);
 
       const removedBursts = removedSubBurstsByParent.get(agent.id);
       if (removedBursts && removedBursts.length > 0) {
@@ -229,32 +213,11 @@ function drawCeilingAndDecor(
   wallClocksRef: MutableRefObject<WallClockVisual[]>,
 ): void {
   drawCeilingLight(room, rx + roomW / 2, ry + 14, theme.accent);
-  drawAmbientGlow(room, rx + roomW / 2, ry + roomH / 2, roomW * 0.4, theme.accent, 0.04);
-  drawBunting(
-    room,
-    rx + 12,
-    ry + 16,
-    roomW - 24,
-    blendColor(theme.accent, 0xffffff, 0.2),
-    blendColor(theme.wall, 0xffffff, 0.4),
-    0.52,
-  );
-
-  drawWhiteboard(room, rx + roomW - 48, ry + 18);
-  drawBookshelf(room, rx + 6, ry + 18);
+  drawAmbientGlow(room, rx + roomW / 2, ry + roomH / 2, roomW * 0.4, theme.accent, 0.025);
   wallClocksRef.current.push(drawWallClock(room, rx + roomW - 16, ry + 12));
-  drawWindow(room, rx + roomW / 2 - 12, ry + 16);
-  if (roomW > 240) {
-    drawWindow(room, rx + roomW / 2 - 40, ry + 16, 20, 16);
-    drawWindow(room, rx + roomW / 2 + 20, ry + 16, 20, 16);
-  }
-  if (roomW > 200) {
-    drawPictureFrame(room, rx + 40, ry + 20);
-  }
-
-  drawPlant(room, rx + 8, ry + roomH - 14, deptIdx);
-  drawPlant(room, rx + roomW - 12, ry + roomH - 14, deptIdx + 1);
-  drawTrashCan(room, rx + roomW - 14, ry + roomH - 26);
+  drawWindow(room, rx + 10, ry + 16, 22, 16);
+  drawWindow(room, rx + roomW - 44, ry + 16, 22, 16);
+  drawPlant(room, rx + 10, ry + roomH - 14, deptIdx);
 }
 
 function renderAgentHeader(
@@ -282,6 +245,10 @@ function renderAgentHeader(
   room.addChild(nameTagBg);
   nameText.position.set(ax, nameY + 2);
   room.addChild(nameText);
+  const statusDot = new Graphics();
+  const statusColor = agent.status === "working" ? 0x59c7a1 : agent.status === "offline" ? 0x84929e : agent.status === "idle" ? 0x6aa4ca : 0xc8a56d;
+  statusDot.circle(ax - nameTagW / 2 - 4, nameY + 6, 2.5).fill(statusColor);
+  room.addChild(statusDot);
 
   if (unread?.has(agent.id)) {
     const bangBg = new Graphics();
