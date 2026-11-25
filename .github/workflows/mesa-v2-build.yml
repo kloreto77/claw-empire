@@ -2,6 +2,8 @@ name: Mesa V2 - build
 on:
   push:
     branches: [mesa-operacoes-v2]
+  pull_request:
+    branches: [mesa-operacoes-v1]
   workflow_dispatch:
 permissions:
   contents: read
@@ -21,3 +23,52 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
       - run: pnpm exec tsx --test scripts/mesa-seed.test.ts
+      - name: Verify protected execution and isolated catalogs
+        shell: bash
+        run: |
+          set -euo pipefail
+          runtime_dir="$(mktemp -d)"
+          export HOST=127.0.0.1 PORT=18790 MESA_SCHEDULER_ENABLED=false
+          export DB_PATH="$runtime_dir/mesa.sqlite" LOGS_DIR="$runtime_dir/logs"
+          export API_AUTH_TOKEN="$(openssl rand -hex 32)"
+          export OAUTH_ENCRYPTION_SECRET="$(openssl rand -hex 32)"
+          pnpm exec tsx server/index.ts > "$runtime_dir/server.log" 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true; cat "$runtime_dir/server.log"; rm -rf "$runtime_dir"' EXIT
+          for attempt in $(seq 1 45); do
+            if curl -fsS http://127.0.0.1:18790/api/health > /dev/null; then break; fi
+            if ! kill -0 "$server_pid" 2>/dev/null; then exit 1; fi
+            sleep 1
+          done
+          node --input-type=module <<'JS'
+          import assert from "node:assert/strict";
+          const base = "http://127.0.0.1:18790";
+          const headers = { authorization: "Bearer " + process.env.API_AUTH_TOKEN, "content-type": "application/json" };
+          async function call(path, method = "GET", body, expected = 200) {
+            const res = await fetch(base + path, { method, headers, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
+            const json = await res.json();
+            assert.equal(res.status, expected, path + " " + JSON.stringify(json));
+            return json;
+          }
+          const { agents } = await call("/api/agents");
+          assert.equal(agents.length, 8);
+          const [a, b] = agents;
+          const schedule = "/api/desk/schedules/" + a.id;
+          const tools = id => "/api/desk/agents/" + id + "/tools";
+          assert.equal((await call(schedule)).globally_enabled, false);
+          assert.deepEqual((await call(tools(a.id))).tools, []);
+          const entry = await call(tools(a.id), "POST", {name:"Market data",kind:"api",reference:"market-data",requested_access:"read"},201);
+          assert.equal(entry.runtime_connected,false);
+          assert.equal((await call(tools(a.id))).tools.length,1);
+          assert.equal((await call(tools(b.id))).tools.length,0);
+          await call(tools(b.id)+"/"+entry.id,"DELETE",undefined,404);
+          await call(tools(a.id)+"/"+entry.id,"DELETE");
+          const { id } = await call("/api/tasks","POST",{title:"Validation only",assigned_agent_id:a.id,department_id:a.department_id,workflow_pack_key:"development"});
+          const run = await call("/api/tasks/"+id+"/run","POST",{},409);
+          assert.equal(run.error,"agent_not_configured");
+          const cfg = {template_task_id:id,interval_minutes:5,max_runs:2};
+          await call(schedule,"PUT",{...cfg,enabled:false});
+          await call(schedule,"PUT",{...cfg,enabled:true},409);
+          assert.equal((await call(schedule)).schedule.enabled,0);
+          console.log("V2 smoke passed: catalog isolation, neutral agent execution blocked, disabled schedule persisted.");
+          JS
