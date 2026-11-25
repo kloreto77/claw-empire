@@ -52,7 +52,7 @@ export function installAgentScheduler(app: Express, db: DatabaseSync): void {
     if (!a) return res.status(404).json({ error: "agent_not_found" });
     const body = req.body ?? {};
     const current = db.prepare("SELECT * FROM desk_agent_schedules WHERE agent_id = ?").get(id) as Schedule | undefined;
-    if (body.enabled === false && current) {
+    if (body.enabled === false && current && body.template_task_id === undefined) {
       db.prepare("UPDATE desk_agent_schedules SET enabled = 0 WHERE agent_id = ?").run(id);
       return res.json({ ok: true });
     }
