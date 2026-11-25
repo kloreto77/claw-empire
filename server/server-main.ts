@@ -22,6 +22,7 @@ import { assertRuntimeFunctionsResolved, createDeferredRuntimeProxy } from "./mo
 import { ROUTE_RUNTIME_HELPER_KEYS } from "./modules/runtime-helper-keys.ts";
 import { startLifecycle } from "./modules/lifecycle.ts";
 import { installAgentScheduler } from "./modules/desk-scheduler.ts";
+import { installDeskToolRegistry } from "./modules/desk-tool-registry.ts";
 import { registerApiRoutes } from "./modules/routes.ts";
 import { initializeWorkflow } from "./modules/workflow.ts";
 import {
@@ -128,4 +129,5 @@ Object.assign(runtimeContext, registerApiRoutes(runtimeContext as RuntimeContext
 assertRuntimeFunctionsResolved(runtimeContext, ROUTE_RUNTIME_HELPER_KEYS, "route helper wiring");
 
 installAgentScheduler(app, db);
+installDeskToolRegistry(app, db);
 startLifecycle(runtimeContext as RuntimeContext);
