@@ -72,6 +72,7 @@ export function initializeDatabaseRuntime(): {
   const dbPath = process.env.DB_PATH ?? DEFAULT_DB_PATH;
   const db = new DatabaseSync(dbPath);
   db.exec("PRAGMA journal_mode = WAL");
+  if (process.env.MESA_LOCAL_MODE === "true") db.exec("PRAGMA synchronous = FULL");
   db.exec(`PRAGMA busy_timeout = ${SQLITE_BUSY_TIMEOUT_MS}`);
   db.exec("PRAGMA foreign_keys = ON");
   console.log(

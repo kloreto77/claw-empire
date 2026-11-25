@@ -22,6 +22,7 @@ import { assertRuntimeFunctionsResolved, createDeferredRuntimeProxy } from "./mo
 import { ROUTE_RUNTIME_HELPER_KEYS } from "./modules/runtime-helper-keys.ts";
 import { startLifecycle } from "./modules/lifecycle.ts";
 import { installAgentScheduler } from "./modules/desk-scheduler.ts";
+import { recoverLocalDeskTasks } from "./modules/lifecycle/local-desk-recovery.ts";
 import { installDeskToolRegistry } from "./modules/desk-tool-registry.ts";
 import { installDeskUsage } from "./modules/desk-usage.ts";
 import { registerApiRoutes } from "./modules/routes.ts";
@@ -60,6 +61,10 @@ applyBaseSchema(db);
 const oauthRuntime = initializeOAuthRuntime({ db, nowMs, runInTransaction });
 applyTaskSchemaMigrations(db);
 applyDefaultSeeds(db);
+if (process.env.MESA_LOCAL_MODE === "true") {
+  const recovered = recoverLocalDeskTasks(db, nowMs(), "startup");
+  if (recovered) console.warn("[Mesa] Interrupted tasks awaiting review:", recovered);
+}
 
 const messageIdempotency = createMessageIdempotencyTools({
   db,

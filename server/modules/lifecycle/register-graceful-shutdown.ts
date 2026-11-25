@@ -1,6 +1,7 @@
 import type { ChildProcess } from "node:child_process";
 import type { DatabaseSync } from "node:sqlite";
 import type { WebSocket as WsSocket, WebSocketServer } from "ws";
+import { recoverLocalDeskTasks } from "./local-desk-recovery.ts";
 
 interface RegisterGracefulShutdownHandlersOptions {
   activeProcesses: Map<string, ChildProcess>;
@@ -36,6 +37,10 @@ export function registerGracefulShutdownHandlers({
       onBeforeClose?.();
     } catch {
       // ignore pre-close cleanup failures
+    }
+
+    if (process.env.MESA_LOCAL_MODE === "true") {
+      recoverLocalDeskTasks(db, nowMs(), "shutdown");
     }
 
     for (const [taskId, child] of activeProcesses) {
