@@ -24,6 +24,8 @@ jobs:
       - run: pnpm build
       - name: Verify initial agent roster and persistence
         run: pnpm exec tsx --test scripts/mesa-seed.test.ts
+      - name: Install browser for visual smoke test
+        run: pnpm exec playwright install --with-deps chromium
       - name: Smoke test built application and live API
         shell: bash
         run: |
@@ -61,6 +63,35 @@ jobs:
           assert.equal(tasks.length, 0);
           console.log("Live API smoke test passed: 8 agents, 0 tasks, frontend served.");
           JS
+          node --input-type=module <<'JS'
+          import assert from "node:assert/strict";
+          import { chromium } from "playwright";
+          const browser = await chromium.launch({ headless: true });
+          try {
+            const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+            await page.goto("http://127.0.0.1:18790", { waitUntil: "domcontentloaded" });
+            await page.getByRole("heading", { name: "Mesa de Operações", exact: true }).waitFor({ timeout: 30000 });
+            await page.locator("canvas").first().waitFor({ state: "visible", timeout: 30000 });
+            await page.screenshot({ path: "/tmp/mesa-office.png", fullPage: true });
+            await page.getByRole("button", { name: "Indicadores", exact: false }).first().click();
+            await page.getByRole("heading", { name: "Central de monitoramento" }).waitFor({ timeout: 15000 });
+            const stations = page.getByRole("article");
+            await stations.last().waitFor();
+            assert.equal(await stations.count(), 8);
+            for (let i = 1; i <= 8; i++) {
+              const station = stations.filter({ hasText: "Agente " + String(i).padStart(2, "0") });
+              assert.equal(await station.count(), 1);
+              assert.match(await station.innerText(), /Não configurado/);
+            }
+            await page.screenshot({ path: "/tmp/mesa-monitor.png", fullPage: true });
+            await stations.first().getByRole("button", { name: "Abrir agente" }).click();
+            await page.getByLabel("Instruções individuais").waitFor();
+            assert.equal(await page.getByLabel("Instruções individuais").inputValue(), "");
+            console.log("Browser smoke passed: canvas, eight stations, individual detail.");
+          } finally {
+            await browser.close();
+          }
+          JS
       - name: Produce formatting patch for review
         if: always()
         shell: bash
@@ -68,9 +99,20 @@ jobs:
           pnpm exec prettier --write .github/workflows/mesa-build.yml compose.mesa.yml scripts/mesa-seed.test.ts server/modules/bootstrap/schema/seeds.ts src/app/AppMainLayout.tsx src/components/agent-detail/AgentDetailTabContent.tsx src/components/AgentDetail.tsx src/components/office-view/buildScene-departments.ts src/components/office-view/buildScene.ts src/components/office-view/drawing-furniture-a.ts src/components/OperationsMonitor.tsx src/components/Sidebar.tsx
           git diff --binary > /tmp/mesa-format.patch
           git diff --stat
+          echo MESA_PATCH_BEGIN
+          cat /tmp/mesa-format.patch
+          echo MESA_PATCH_END
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: mesa-format-patch
           path: /tmp/mesa-format.patch
+          if-no-files-found: warn
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mesa-browser-screenshots
+          path: |
+            /tmp/mesa-office.png
+            /tmp/mesa-monitor.png
           if-no-files-found: warn
