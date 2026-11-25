@@ -1,6 +1,6 @@
 {
   "name": "mesa-operacoes-desktop",
-  "version": "2.0.5",
+  "version": "2.0.6",
   "private": true,
   "main": "main.cjs",
   "description": "Mesa de Operações V2 para Windows",
@@ -26,7 +26,9 @@
         "from": "../.desktop-runtime",
         "to": "mesa-runtime",
         "filter": [
-          "**/*"
+          "**/*",
+          "!node_modules",
+          "!node_modules/**"
         ]
       }
     ],
@@ -57,7 +59,8 @@
         "repo": "claw-empire",
         "releaseType": "release"
       }
-    ]
+    ],
+    "afterPack": "./after-pack.cjs"
   },
   "dependencies": {
     "electron-updater": "6.8.12"

@@ -71,6 +71,8 @@ async function startBackend() {
     fs.rmSync(log + ".previous", { force: true });
     fs.renameSync(log, log + ".previous");
   }
+  const loader = path.join(runtime, "node_modules", "tsx", "dist", "loader.mjs");
+  if (!fs.existsSync(loader)) throw new Error("Backend dependency missing: " + loader);
   report("Starting bundled backend: " + runtime);
   const fd = fs.openSync(log, "a");
   const env = {
@@ -98,7 +100,7 @@ async function startBackend() {
   try {
     child = spawn(
       path.join(runtime, "node.exe"),
-      ["--import", pathToFileURL(path.join(runtime, "node_modules", "tsx", "dist", "loader.mjs")).href,
+      ["--import", pathToFileURL(loader).href,
         path.join(runtime, "desktop-backend.mjs")],
       { cwd: data, env, windowsHide: true, stdio: ["ignore", fd, fd, "ipc"] },
     );

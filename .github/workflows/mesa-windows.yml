@@ -58,7 +58,7 @@ jobs:
         working-directory: desktop
         run: npm install --no-audit --no-fund
       - name: Format desktop sources
-        run: pnpm exec prettier --check desktop/main.cjs desktop/backend.mjs desktop/package.json .github/workflows/mesa-windows.yml
+        run: pnpm exec prettier --check desktop/main.cjs desktop/backend.mjs desktop/after-pack.cjs desktop/package.json .github/workflows/mesa-windows.yml
         continue-on-error: true
       - name: Package Windows installer
         working-directory: desktop
@@ -70,10 +70,14 @@ jobs:
           $runtime = Join-Path $PWD 'desktop-release/win-unpacked/resources/mesa-runtime'
           $node = Join-Path $runtime 'node.exe'
           $loader = Join-Path $runtime 'node_modules/tsx/dist/loader.mjs'
+          if (!(Test-Path $loader)) { throw "Packaged TSX loader missing: $loader" }
           & $node --version
           if ($LASTEXITCODE -ne 0) { throw 'Bundled Node failed' }
           $loaderUri = ([uri]$loader).AbsoluteUri
-          & $node --import $loaderUri -e "require('node:sqlite'); console.log('Bundled SQLite and tsx OK')"
+          Push-Location $runtime
+          try {
+            & $node --import $loaderUri -e "require('node:sqlite'); require('express'); require('ws'); require('esbuild').transformSync('const n: number = 1', {loader: 'ts'}); console.log('Bundled SQLite, tsx and dependencies OK')"
+          } finally { Pop-Location }
           if ($LASTEXITCODE -ne 0) { throw 'Bundled Node/tsx/SQLite failed' }
       - name: Launch packaged desktop smoke test
         shell: pwsh
