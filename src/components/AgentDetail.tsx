@@ -15,6 +15,7 @@ import type {
 import AgentAvatar from "./AgentAvatar";
 import AgentDetailTabContent from "./agent-detail/AgentDetailTabContent";
 import AgentSchedule from "./agent-detail/AgentSchedule";
+import AgentToolRegistry from "./agent-detail/AgentToolRegistry";
 import { CLI_LABELS, oauthAccountLabel, roleLabel, STATUS_CONFIG, statusLabel } from "./agent-detail/constants";
 
 interface AgentDetailProps {
@@ -841,6 +842,7 @@ export default function AgentDetail({
             </section>
           )}
           {tab === "info" && <AgentSchedule key={agent.id} agent={agent} tasks={agentTasks} />}
+          {tab === "info" && <AgentToolRegistry key={agent.id + "-tools"} agentId={agent.id} />}
           <AgentDetailTabContent
             tab={tab}
             t={t}
