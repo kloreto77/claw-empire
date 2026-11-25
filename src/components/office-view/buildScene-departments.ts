@@ -147,9 +147,13 @@ export function buildDepartmentRooms({
     }
 
     deptAgents.forEach((agent, agentIdx) => {
-      const acol = agentIdx % COLS_PER_ROW;
-      const arow = Math.floor(agentIdx / COLS_PER_ROW);
-      const ax = rx + ROOM_PAD + acol * SLOT_W + SLOT_W / 2;
+      const seatsPerRow = departments.length === 1
+        ? Math.min(4, Math.max(1, Math.floor((roomW - ROOM_PAD * 2) / SLOT_W)))
+        : COLS_PER_ROW;
+      const acol = agentIdx % seatsPerRow;
+      const arow = Math.floor(agentIdx / seatsPerRow);
+      const seatsInRow = Math.min(seatsPerRow, deptAgents.length - arow * seatsPerRow);
+      const ax = rx + (roomW - seatsInRow * SLOT_W) / 2 + acol * SLOT_W + SLOT_W / 2;
       const ay = ry + 38 + arow * SLOT_H;
       const isWorking = agent.status === "working";
       const isOffline = agent.status === "offline";
