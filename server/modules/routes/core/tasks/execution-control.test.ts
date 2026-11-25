@@ -17,6 +17,9 @@ type AgentRow = {
   status: string;
   department_id: string | null;
   current_task_id: string | null;
+  cli_provider: string | null;
+  api_provider_id: string | null;
+  api_model: string | null;
 };
 
 type LinkedSubtaskRow = {
@@ -142,9 +145,25 @@ function createFakeDb(state: FakeDbState): {
           all: () => [],
         };
       }
-      if (sql.startsWith("SELECT * FROM agents WHERE id = ?")) {
+      if (
+        sql.startsWith("SELECT * FROM agents WHERE id = ?") ||
+        sql.startsWith("SELECT status, cli_provider, api_provider_id, api_model FROM agents WHERE id = ?")
+      ) {
         return {
           get: (agentId: string) => state.agents.get(agentId),
+          all: () => [],
+          run: () => ({ changes: 0 }),
+        };
+      }
+      if (sql.startsWith("SELECT 1 FROM tasks WHERE assigned_agent_id = ? AND id <> ?")) {
+        return {
+          get: (agentId: string, taskId: string) =>
+            [...state.tasks.values()].find(
+              (task) =>
+                task.assigned_agent_id === agentId &&
+                task.id !== taskId &&
+                ["in_progress", "collaborating"].includes(task.status),
+            ),
           all: () => [],
           run: () => ({ changes: 0 }),
         };
@@ -254,6 +273,9 @@ function createDeps(seed?: {
           status: "running",
           department_id: "qa",
           current_task_id: taskId,
+          cli_provider: "api",
+          api_provider_id: "test-provider",
+          api_model: "test-model",
           ...seed?.agent,
         },
       ],
@@ -488,6 +510,51 @@ describe("registerTaskExecutionControlRoutes", () => {
       "qa",
       "QA/QC",
     );
+  });
+
+  it("rejects resuming a task for an unconfigured agent", () => {
+    const harness = createDeps({
+      task: { status: "pending" },
+      agent: { status: "idle", cli_provider: null },
+    });
+    registerTaskExecutionControlRoutes(harness.deps);
+    const res = createFakeRes();
+    harness.routes.get("/api/tasks/:id/resume")?.(
+      {
+        params: { id: "task-1" },
+        body: {},
+        query: {},
+        method: "POST",
+        header: (name: string) => (name.toLowerCase() === "x-csrf-token" ? getCsrfToken() : undefined),
+      },
+      res,
+    );
+    expect(res.statusCode).toBe(409);
+    expect(res.payload).toMatchObject({ error: "agent_not_configured" });
+    expect(harness.state.tasks.get("task-1")?.status).toBe("pending");
+    expect(harness.spies.startTaskExecutionForAgent).not.toHaveBeenCalled();
+  });
+
+  it("rejects resuming a task when the agent owns another active task", () => {
+    const harness = createDeps({ task: { status: "pending" }, agent: { status: "idle" } });
+    const task = harness.state.tasks.get("task-1")!;
+    harness.state.tasks.set("task-2", { ...task, id: "task-2", status: "in_progress" });
+    registerTaskExecutionControlRoutes(harness.deps);
+    const res = createFakeRes();
+    harness.routes.get("/api/tasks/:id/resume")?.(
+      {
+        params: { id: "task-1" },
+        body: {},
+        query: {},
+        method: "POST",
+        header: (name: string) => (name.toLowerCase() === "x-csrf-token" ? getCsrfToken() : undefined),
+      },
+      res,
+    );
+    expect(res.statusCode).toBe(409);
+    expect(res.payload).toMatchObject({ error: "agent_busy_or_unavailable" });
+    expect(harness.state.tasks.get("task-1")?.status).toBe("pending");
+    expect(harness.spies.startTaskExecutionForAgent).not.toHaveBeenCalled();
   });
 
   it("pause -> inject -> resume 통합 흐름이 순차 처리된다", () => {
