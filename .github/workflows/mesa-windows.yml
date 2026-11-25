@@ -132,6 +132,10 @@ jobs:
       - name: Test installer and real version upgrade
         shell: pwsh
         run: ./desktop/test-update.ps1
+      - name: Record packaged application fingerprint
+        shell: pwsh
+        run: |
+          (Get-FileHash 'desktop-release/win-unpacked/resources/app.asar' -Algorithm SHA256).Hash | Set-Content 'desktop-release/app-asar.sha256'
       - name: Upload installer
         uses: actions/upload-artifact@v4
         with:
@@ -140,6 +144,7 @@ jobs:
             desktop-release/Mesa-V2-Setup-*.exe
             desktop-release/Mesa-V2-Setup-*.exe.blockmap
             desktop-release/latest.yml
+            desktop-release/app-asar.sha256
           if-no-files-found: error
           retention-days: 30
       - name: Upload desktop diagnostics
@@ -175,3 +180,29 @@ jobs:
             exit 0
           fi
           gh release create "v$version" desktop-release/Mesa-V2-Setup-*.exe desktop-release/Mesa-V2-Setup-*.exe.blockmap desktop-release/latest.yml --target "$GITHUB_SHA" --title "Mesa V2 Desktop $version" --notes "Windows x64. Build and desktop smoke test passed. Experimental unsigned installer."
+  verify-public-update:
+    needs: publish
+    if: github.ref == 'refs/heads/mesa-operacoes-v2' && needs.publish.result == 'success'
+    runs-on: windows-2025
+    timeout-minutes: 40
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: actions/download-artifact@v4
+        with:
+          name: Mesa-V2-Windows-x64
+          path: desktop-release
+      - name: Test public GitHub update with installed production app
+        shell: pwsh
+        run: ./desktop/test-public-update.ps1
+      - name: Upload public update diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Mesa-V2-public-update-diagnostics
+          path: desktop-public-diagnostics/
+          if-no-files-found: ignore
