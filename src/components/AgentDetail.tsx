@@ -416,7 +416,7 @@ export default function AgentDetail({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className="w-[calc(100vw-1.5rem)] max-w-[760px] max-h-[92dvh] flex flex-col overflow-hidden rounded-2xl border border-slate-700 bg-slate-800 shadow-2xl">
+      <div className="w-[calc(100vw-1.5rem)] max-w-[560px] max-h-[92dvh] flex flex-col overflow-hidden rounded-2xl border border-slate-700 bg-slate-800 shadow-2xl">
         <div
           className="relative px-6 py-5 border-b border-slate-700"
           style={{
