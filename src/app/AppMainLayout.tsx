@@ -1,7 +1,7 @@
 import { useCallback, useMemo, type ReactNode } from "react";
 import Sidebar from "../components/Sidebar";
 import OfficeView from "../components/OfficeView";
-import Dashboard from "../components/Dashboard";
+import OperationsMonitor from "../components/OperationsMonitor";
 import TaskBoard from "../components/TaskBoard";
 import AgentManager from "../components/AgentManager";
 import SkillsLibrary from "../components/SkillsLibrary";
@@ -140,7 +140,6 @@ export default function AppMainLayout({
   setView,
   departments,
   agents,
-  stats,
   tasks,
   subtasks,
   subAgents,
@@ -555,12 +554,13 @@ export default function AppMainLayout({
             )}
 
             {view === "dashboard" && (
-              <Dashboard
-                stats={stats}
-                agents={agents}
-                tasks={tasks}
-                companyName={settings.companyName}
-                onPrimaryCtaClick={() => setView("tasks")}
+              <OperationsMonitor
+                agents={officePresentation.agents}
+                tasks={tasksForActivePack}
+                connected={connected}
+                onSelectAgent={onSelectAgent}
+                onOpenTerminal={onOpenTerminal}
+                onOpenTasks={() => setView("tasks")}
               />
             )}
 
