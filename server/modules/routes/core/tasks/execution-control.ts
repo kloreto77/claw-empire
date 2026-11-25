@@ -502,12 +502,25 @@ export function registerTaskExecutionControlRoutes(deps: TaskExecutionControlRou
     }
 
     if (task.assigned_agent_id) {
-      const owner = db.prepare("SELECT status, cli_provider, api_provider_id, api_model FROM agents WHERE id = ?").get(task.assigned_agent_id);
-      if (!owner || !owner.cli_provider || (owner.cli_provider === "api" && (!owner.api_provider_id || !owner.api_model))) {
+      const owner = db
+        .prepare("SELECT status, cli_provider, api_provider_id, api_model FROM agents WHERE id = ?")
+        .get(task.assigned_agent_id);
+      if (
+        !owner ||
+        !owner.cli_provider ||
+        (owner.cli_provider === "api" && (!owner.api_provider_id || !owner.api_model))
+      ) {
         return res.status(409).json({ error: "agent_not_configured" });
       }
-      if (owner.status === "working" || owner.status === "offline" ||
-          db.prepare("SELECT 1 FROM tasks WHERE assigned_agent_id = ? AND id <> ? AND status IN ('in_progress','collaborating') LIMIT 1").get(task.assigned_agent_id, id)) {
+      if (
+        owner.status === "working" ||
+        owner.status === "offline" ||
+        db
+          .prepare(
+            "SELECT 1 FROM tasks WHERE assigned_agent_id = ? AND id <> ? AND status IN ('in_progress','collaborating') LIMIT 1",
+          )
+          .get(task.assigned_agent_id, id)
+      ) {
         return res.status(409).json({ error: "agent_busy_or_unavailable" });
       }
     }
@@ -535,10 +548,23 @@ export function registerTaskExecutionControlRoutes(deps: TaskExecutionControlRou
           () => {
             if (isTaskWorkflowInterrupted(id) || activeProcesses.has(id)) return;
             const freshAgent = db.prepare("SELECT * FROM agents WHERE id = ?").get(agent.id) as AgentRow | undefined;
-            if (!freshAgent || freshAgent.status === "working" || freshAgent.status === "offline" || !freshAgent.cli_provider ||
-                (freshAgent.cli_provider === "api" && (!freshAgent.api_provider_id || !freshAgent.api_model)) ||
-                db.prepare("SELECT 1 FROM tasks WHERE assigned_agent_id = ? AND id <> ? AND status IN ('in_progress','collaborating') LIMIT 1").get(agent.id, id)) {
-              appendTaskLog(id, "system", "Automatic resume deferred: agent busy or unavailable; task remains planned.");
+            if (
+              !freshAgent ||
+              freshAgent.status === "working" ||
+              freshAgent.status === "offline" ||
+              !freshAgent.cli_provider ||
+              (freshAgent.cli_provider === "api" && (!freshAgent.api_provider_id || !freshAgent.api_model)) ||
+              db
+                .prepare(
+                  "SELECT 1 FROM tasks WHERE assigned_agent_id = ? AND id <> ? AND status IN ('in_progress','collaborating') LIMIT 1",
+                )
+                .get(agent.id, id)
+            ) {
+              appendTaskLog(
+                id,
+                "system",
+                "Automatic resume deferred: agent busy or unavailable; task remains planned.",
+              );
               return;
             }
             startTaskExecutionForAgent(id, freshAgent, deptId, deptName);

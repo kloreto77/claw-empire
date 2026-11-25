@@ -125,9 +125,11 @@ export function applyDefaultSeeds(db: DbLike): void {
     try {
       const agentCount = (db.prepare("SELECT COUNT(*) as cnt FROM agents").get() as { cnt: number }).cnt;
       if (agentCount === 0) {
-        const department = db.prepare(
-          "SELECT id FROM departments ORDER BY CASE WHEN id = 'operations' THEN 0 ELSE 1 END, sort_order, id LIMIT 1",
-        ).get() as { id: string } | undefined;
+        const department = db
+          .prepare(
+            "SELECT id FROM departments ORDER BY CASE WHEN id = 'operations' THEN 0 ELSE 1 END, sort_order, id LIMIT 1",
+          )
+          .get() as { id: string } | undefined;
         if (!department) throw new Error("No department available for the trading desk");
         const insertAgent = db.prepare(
           `INSERT INTO agents
@@ -217,7 +219,5 @@ export function applyDefaultSeeds(db: DbLike): void {
     } catch (err) {
       console.warn("[Claw-Empire] Failed to recreate idx_departments_sort_order:", err);
     }
-
-
   }
 }

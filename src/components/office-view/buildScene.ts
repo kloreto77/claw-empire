@@ -135,9 +135,8 @@ export function buildOfficeScene(context: BuildOfficeSceneContext): void {
   const maxAgents = Math.max(1, ...agentsPerDept.map((deptAgents) => deptAgents.length));
   const totalRoomSpace = OFFICE_W - 24 - (gridCols - 1) * roomGap;
   const roomW = Math.max(baseRoomW, Math.floor(totalRoomSpace / gridCols));
-  const seatsPerRow = departments.length === 1
-    ? Math.min(4, Math.max(1, Math.floor((roomW - ROOM_PAD * 2) / SLOT_W)))
-    : COLS_PER_ROW;
+  const seatsPerRow =
+    departments.length === 1 ? Math.min(4, Math.max(1, Math.floor((roomW - ROOM_PAD * 2) / SLOT_W))) : COLS_PER_ROW;
   const agentRows = Math.ceil(maxAgents / seatsPerRow);
   const roomH = Math.max(170, agentRows * SLOT_H + 44);
   const deptStartY = CEO_ZONE_H + HALLWAY_H;

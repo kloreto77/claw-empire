@@ -116,10 +116,14 @@ export default function AgentDetail({
     }
     return CODEX_REASONING_FALLBACK_OPTIONS;
   }, [selectedCli, selectedCliModelMeta]);
-  const selectedApiProvider = apiProviders.find((provider) => provider.id === selectedApiProviderId && provider.enabled);
-  const canSaveCli = Boolean(selectedCli) && (requiresApiProvider
-    ? Boolean(selectedApiProvider && selectedApiModel.trim() && !apiLoading)
-    : !requiresOAuthAccount || Boolean(selectedOAuthAccountId));
+  const selectedApiProvider = apiProviders.find(
+    (provider) => provider.id === selectedApiProviderId && provider.enabled,
+  );
+  const canSaveCli =
+    Boolean(selectedCli) &&
+    (requiresApiProvider
+      ? Boolean(selectedApiProvider && selectedApiModel.trim() && !apiLoading)
+      : !requiresOAuthAccount || Boolean(selectedOAuthAccountId));
 
   useEffect(() => {
     setInstructionDraft(agent.personality ?? "");
@@ -130,12 +134,17 @@ export default function AgentDetail({
     if (!editingCli || !requiresApiProvider) return;
     let cancelled = false;
     setConfigError("");
-    api.getApiProviders().then((providers) => {
-      if (!cancelled) setApiProviders(providers.filter((provider) => provider.enabled));
-    }).catch(() => {
-      if (!cancelled) setConfigError("Não foi possível carregar os provedores de API.");
-    });
-    return () => { cancelled = true; };
+    api
+      .getApiProviders()
+      .then((providers) => {
+        if (!cancelled) setApiProviders(providers.filter((provider) => provider.enabled));
+      })
+      .catch(() => {
+        if (!cancelled) setConfigError("Não foi possível carregar os provedores de API.");
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [editingCli, requiresApiProvider]);
 
   useEffect(() => {
@@ -144,17 +153,23 @@ export default function AgentDetail({
     if (!editingCli || !requiresApiProvider || !selectedApiProviderId) return;
     let cancelled = false;
     setApiLoading(true);
-    api.getApiProviderModels(selectedApiProviderId).then((result) => {
-      if (!cancelled) {
-        setApiModels(result.models ?? []);
-        if (!result.ok) setConfigError("Lista de modelos indisponível. Verifique a conexão em Configurações.");
-      }
-    }).catch(() => {
-      if (!cancelled) setConfigError("Lista de modelos indisponível. Verifique a conexão em Configurações.");
-    }).finally(() => {
-      if (!cancelled) setApiLoading(false);
-    });
-    return () => { cancelled = true; };
+    api
+      .getApiProviderModels(selectedApiProviderId)
+      .then((result) => {
+        if (!cancelled) {
+          setApiModels(result.models ?? []);
+          if (!result.ok) setConfigError("Lista de modelos indisponível. Verifique a conexão em Configurações.");
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setConfigError("Lista de modelos indisponível. Verifique a conexão em Configurações.");
+      })
+      .finally(() => {
+        if (!cancelled) setApiLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [editingCli, requiresApiProvider, selectedApiProviderId]);
 
   const handleSaveInstructions = async () => {
@@ -191,7 +206,6 @@ export default function AgentDetail({
     },
     [t],
   );
-
 
   useEffect(() => {
     setSelectedCli(agent.cli_provider);
@@ -503,7 +517,9 @@ export default function AgentDetail({
                           }}
                           className="w-[94px] shrink-0 bg-slate-700 text-slate-200 text-xs rounded px-1 py-0.5 border border-slate-600 focus:outline-none focus:border-blue-500"
                         >
-                          <option value="" disabled>Sem provedor configurado</option>
+                          <option value="" disabled>
+                            Sem provedor configurado
+                          </option>
                           {Object.entries(CLI_LABELS).map(([key, label]) => (
                             <option key={key} value={key}>
                               {label}
@@ -619,8 +635,10 @@ export default function AgentDetail({
                         }}
                         className="bg-slate-700 text-slate-200 text-xs rounded px-1.5 py-0.5 border border-slate-600 focus:outline-none focus:border-blue-500"
                       >
-                        <option value="" disabled>Sem provedor configurado</option>
-                          {Object.entries(CLI_LABELS).map(([key, label]) => (
+                        <option value="" disabled>
+                          Sem provedor configurado
+                        </option>
+                        {Object.entries(CLI_LABELS).map(([key, label]) => (
                           <option key={key} value={key}>
                             {label}
                           </option>
@@ -673,7 +691,9 @@ export default function AgentDetail({
                           >
                             <option value="">Selecione um provedor</option>
                             {apiProviders.map((provider) => (
-                              <option key={provider.id} value={provider.id}>{provider.name} ({provider.type})</option>
+                              <option key={provider.id} value={provider.id}>
+                                {provider.name} ({provider.type})
+                              </option>
                             ))}
                           </select>
                           {apiProviders.length === 0 && (
@@ -691,7 +711,9 @@ export default function AgentDetail({
                                 className="w-full bg-slate-700 text-slate-200 rounded px-2 py-1 border border-slate-600"
                               />
                               <datalist id="agent-api-models">
-                                {apiModels.map((model) => <option key={model} value={model} />)}
+                                {apiModels.map((model) => (
+                                  <option key={model} value={model} />
+                                ))}
                               </datalist>
                             </>
                           )}
@@ -779,15 +801,17 @@ export default function AgentDetail({
                     })}
                   >
                     {"Modelo: "}
-                    {!agent.cli_provider ? "Não configurado" : agent.cli_provider === "api" && agent.api_model
-                      ? `API: ${agent.api_model}`
-                      : agent.cli_model &&
-                          CLI_MODEL_OVERRIDE_PROVIDERS.includes(agent.cli_provider) &&
-                          agent.cli_provider !== "api"
-                        ? `${CLI_LABELS[agent.cli_provider] ?? agent.cli_provider} · ${agent.cli_model}${agent.cli_provider === "codex" && agent.cli_reasoning_level ? ` (${agent.cli_reasoning_level})` : ""}`
-                        : agent.cli_provider === "codex" && agent.cli_reasoning_level
-                          ? `${CLI_LABELS[agent.cli_provider] ?? agent.cli_provider} · (${agent.cli_reasoning_level})`
-                          : (CLI_LABELS[agent.cli_provider] ?? agent.cli_provider)}
+                    {!agent.cli_provider
+                      ? "Não configurado"
+                      : agent.cli_provider === "api" && agent.api_model
+                        ? `API: ${agent.api_model}`
+                        : agent.cli_model &&
+                            CLI_MODEL_OVERRIDE_PROVIDERS.includes(agent.cli_provider) &&
+                            agent.cli_provider !== "api"
+                          ? `${CLI_LABELS[agent.cli_provider] ?? agent.cli_provider} · ${agent.cli_model}${agent.cli_provider === "codex" && agent.cli_reasoning_level ? ` (${agent.cli_reasoning_level})` : ""}`
+                          : agent.cli_provider === "codex" && agent.cli_reasoning_level
+                            ? `${CLI_LABELS[agent.cli_provider] ?? agent.cli_provider} · (${agent.cli_reasoning_level})`
+                            : (CLI_LABELS[agent.cli_provider] ?? agent.cli_provider)}
                     <span className="text-[9px] text-slate-600 ml-0.5">✏️</span>
                   </button>
                 )}
@@ -827,17 +851,30 @@ export default function AgentDetail({
         </div>
 
         <div className="p-4 overflow-y-auto min-h-0 flex-1">
-          {configError && <p role="alert" className="mb-3 text-xs text-red-300">{configError}</p>}
+          {configError && (
+            <p role="alert" className="mb-3 text-xs text-red-300">
+              {configError}
+            </p>
+          )}
           {tab === "info" && (
             <section className="mb-4 space-y-2 rounded-lg border border-slate-600 p-3">
-              <label htmlFor="agent-instructions" className="block text-xs font-semibold text-slate-200">Instruções individuais</label>
-              <textarea id="agent-instructions" rows={4} value={instructionDraft}
+              <label htmlFor="agent-instructions" className="block text-xs font-semibold text-slate-200">
+                Instruções individuais
+              </label>
+              <textarea
+                id="agent-instructions"
+                rows={4}
+                value={instructionDraft}
                 onChange={(event) => setInstructionDraft(event.target.value)}
                 placeholder="Defina as instruções quando estiver pronto."
-                className="w-full rounded bg-slate-700 p-2 text-sm text-slate-100" />
-              <button type="button" disabled={savingInstructions || instructionDraft === (agent.personality ?? "")}
+                className="w-full rounded bg-slate-700 p-2 text-sm text-slate-100"
+              />
+              <button
+                type="button"
+                disabled={savingInstructions || instructionDraft === (agent.personality ?? "")}
                 onClick={() => void handleSaveInstructions()}
-                className="rounded bg-blue-600 px-3 py-1.5 text-xs text-white disabled:opacity-50">
+                className="rounded bg-blue-600 px-3 py-1.5 text-xs text-white disabled:opacity-50"
+              >
                 {savingInstructions ? "Salvando..." : "Salvar instruções"}
               </button>
             </section>

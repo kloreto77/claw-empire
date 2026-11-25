@@ -41,7 +41,9 @@ export default function AgentDetailTabContent({
   const [logError, setLogError] = useState("");
   const [logData, setLogData] = useState<{ taskId: string; logs: TaskLog[] } | null>(null);
   const [logRefresh, setLogRefresh] = useState(0);
-  const configured = Boolean(agent.cli_provider && (agent.cli_provider !== "api" || (agent.api_provider_id && agent.api_model)));
+  const configured = Boolean(
+    agent.cli_provider && (agent.cli_provider !== "api" || (agent.api_provider_id && agent.api_model)),
+  );
 
   useEffect(() => {
     if (tab !== "tasks" || !expandedTaskId || !agentTasks.some((task) => task.id === expandedTaskId)) return;
@@ -64,7 +66,10 @@ export default function AgentDetailTabContent({
     };
     void load();
     const timer = window.setInterval(() => void load(), 3000);
-    return () => { cancelled = true; window.clearInterval(timer); };
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
   }, [tab, expandedTaskId, agent.id, logRefresh]);
 
   const execute = async (task: Task, action: "run" | "pause" | "resume" | "stop") => {
@@ -111,7 +116,9 @@ export default function AgentDetailTabContent({
             </div>
           </div>
           <div className="bg-slate-700/30 rounded-lg p-3 text-center">
-            <div className="text-lg font-bold text-white">{agentTasks.filter((task) => task.status === "in_progress").length}</div>
+            <div className="text-lg font-bold text-white">
+              {agentTasks.filter((task) => task.status === "in_progress").length}
+            </div>
             <div className="text-[10px] text-slate-500">Em execução</div>
           </div>
           <div className="bg-slate-700/30 rounded-lg p-3 text-center">
@@ -154,8 +161,14 @@ export default function AgentDetailTabContent({
   if (tab === "tasks") {
     return (
       <div className="space-y-2">
-        {!configured && <p className="text-xs text-amber-300">Configure o provedor e o modelo antes de iniciar tarefas.</p>}
-        {actionError && <p role="alert" className="text-xs text-red-300">{actionError}</p>}
+        {!configured && (
+          <p className="text-xs text-amber-300">Configure o provedor e o modelo antes de iniciar tarefas.</p>
+        )}
+        {actionError && (
+          <p role="alert" className="text-xs text-red-300">
+            {actionError}
+          </p>
+        )}
         {agentTasks.length === 0 ? (
           <div className="text-center py-8 text-slate-500 text-sm">
             {t({
@@ -208,37 +221,73 @@ export default function AgentDetailTabContent({
                 </button>
                 <div className="mt-2 flex flex-wrap gap-2">
                   {(taskItem.status === "planned" || taskItem.status === "inbox") && (
-                    <button type="button" disabled={Boolean(busyTaskId) || !configured || agent.status !== "idle"}
+                    <button
+                      type="button"
+                      disabled={Boolean(busyTaskId) || !configured || agent.status !== "idle"}
                       onClick={() => void execute(taskItem, "run")}
-                      className="rounded bg-emerald-700 px-2.5 py-1 text-xs text-white disabled:opacity-40">Iniciar</button>
+                      className="rounded bg-emerald-700 px-2.5 py-1 text-xs text-white disabled:opacity-40"
+                    >
+                      Iniciar
+                    </button>
                   )}
                   {taskItem.status === "in_progress" && (
                     <>
-                      <button type="button" disabled={Boolean(busyTaskId)}
+                      <button
+                        type="button"
+                        disabled={Boolean(busyTaskId)}
                         onClick={() => void execute(taskItem, "pause")}
-                        className="rounded bg-slate-600 px-2.5 py-1 text-xs text-white disabled:opacity-40">Pausar</button>
-                      <button type="button" disabled={Boolean(busyTaskId)}
+                        className="rounded bg-slate-600 px-2.5 py-1 text-xs text-white disabled:opacity-40"
+                      >
+                        Pausar
+                      </button>
+                      <button
+                        type="button"
+                        disabled={Boolean(busyTaskId)}
                         onClick={() => void execute(taskItem, "stop")}
-                        className="rounded bg-red-800 px-2.5 py-1 text-xs text-white disabled:opacity-40">Interromper</button>
+                        className="rounded bg-red-800 px-2.5 py-1 text-xs text-white disabled:opacity-40"
+                      >
+                        Interromper
+                      </button>
                     </>
                   )}
                   {(taskItem.status === "pending" || taskItem.status === "cancelled") && (
-                    <button type="button" disabled={Boolean(busyTaskId) || !configured || agent.status !== "idle"}
+                    <button
+                      type="button"
+                      disabled={Boolean(busyTaskId) || !configured || agent.status !== "idle"}
                       onClick={() => void execute(taskItem, "resume")}
-                      className="rounded bg-blue-700 px-2.5 py-1 text-xs text-white disabled:opacity-40">Retomar</button>
+                      className="rounded bg-blue-700 px-2.5 py-1 text-xs text-white disabled:opacity-40"
+                    >
+                      Retomar
+                    </button>
                   )}
-                  <button type="button" onClick={() => setExpandedTaskId(isExpanded ? null : taskItem.id)}
-                    className="rounded border border-slate-500 px-2.5 py-1 text-xs text-slate-200">{isExpanded ? "Ocultar registros" : "Registros"}</button>
+                  <button
+                    type="button"
+                    onClick={() => setExpandedTaskId(isExpanded ? null : taskItem.id)}
+                    className="rounded border border-slate-500 px-2.5 py-1 text-xs text-slate-200"
+                  >
+                    {isExpanded ? "Ocultar registros" : "Registros"}
+                  </button>
                   {taskItem.status === "in_progress" && onOpenTerminal && (
-                    <button type="button" onClick={() => onOpenTerminal(taskItem.id)}
-                      className="rounded border border-slate-500 px-2.5 py-1 text-xs text-slate-200">Terminal ao vivo</button>
+                    <button
+                      type="button"
+                      onClick={() => onOpenTerminal(taskItem.id)}
+                      className="rounded border border-slate-500 px-2.5 py-1 text-xs text-slate-200"
+                    >
+                      Terminal ao vivo
+                    </button>
                   )}
                   {busyTaskId === taskItem.id && <span className="text-xs text-slate-400">Enviando comando...</span>}
                 </div>
                 {isExpanded && (
                   <div className="mt-3 rounded border border-slate-600 bg-slate-900 p-2">
-                    <div className="mb-2 text-xs font-medium text-slate-200">Registros da tarefa · atualização a cada 3 s</div>
-                    {logError && <p role="alert" className="text-xs text-red-300">{logError}</p>}
+                    <div className="mb-2 text-xs font-medium text-slate-200">
+                      Registros da tarefa · atualização a cada 3 s
+                    </div>
+                    {logError && (
+                      <p role="alert" className="text-xs text-red-300">
+                        {logError}
+                      </p>
+                    )}
                     {logData?.taskId !== taskItem.id ? (
                       <p className="text-xs text-slate-400">{logError ? "Registros indisponíveis" : "Carregando..."}</p>
                     ) : logData.logs.length === 0 ? (
@@ -247,7 +296,10 @@ export default function AgentDetailTabContent({
                       <div className="max-h-48 overflow-y-auto space-y-1 font-mono text-[10px] text-slate-300">
                         {logData.logs.slice(-100).map((log) => (
                           <div key={log.id} className="whitespace-pre-wrap break-words">
-                            <span className="text-slate-400">{new Date(log.created_at).toLocaleTimeString("pt-BR")} · {log.kind} · </span>{log.message}
+                            <span className="text-slate-400">
+                              {new Date(log.created_at).toLocaleTimeString("pt-BR")} · {log.kind} ·{" "}
+                            </span>
+                            {log.message}
                           </div>
                         ))}
                       </div>

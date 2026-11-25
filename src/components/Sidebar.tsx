@@ -59,7 +59,16 @@ export default function Sidebar({ currentView, onChangeView, departments, agents
             style={{ background: "#142a35", border: "1px solid #355763", color: "#77c5be" }}
             aria-hidden="true"
           >
-            <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+            <svg
+              viewBox="0 0 24 24"
+              width="21"
+              height="21"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.6"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
               <path d="M4 4v16h16M7 15l4-4 3 2 5-6" />
               <path d="M15 7h4v4" />
             </svg>
@@ -87,9 +96,7 @@ export default function Sidebar({ currentView, onChangeView, departments, agents
               currentView === item.view ? "active font-semibold shadow-sm shadow-blue-500/10" : ""
             }`}
           >
-            <span className="text-base shrink-0">
-              {item.icon}
-            </span>
+            <span className="text-base shrink-0">{item.icon}</span>
             {!collapsed && <span>{navLabels[item.view]}</span>}
           </button>
         ))}

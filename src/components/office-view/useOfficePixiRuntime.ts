@@ -203,7 +203,14 @@ export function useOfficePixiRuntime({
 
     const resizeObserver = new ResizeObserver((entries) => {
       const entry = entries[0];
-      if (!entry || !appRef.current || !initDoneRef.current || destroyedRef.current || initIdRef.current !== currentInitId) return;
+      if (
+        !entry ||
+        !appRef.current ||
+        !initDoneRef.current ||
+        destroyedRef.current ||
+        initIdRef.current !== currentInitId
+      )
+        return;
       const newWidth = Math.max(MIN_OFFICE_W, Math.floor(entry.contentRect.width));
       if (Math.abs(newWidth - officeWRef.current) > 10) {
         officeWRef.current = newWidth;

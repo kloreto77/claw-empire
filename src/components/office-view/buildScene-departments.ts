@@ -147,9 +147,8 @@ export function buildDepartmentRooms({
     }
 
     deptAgents.forEach((agent, agentIdx) => {
-      const seatsPerRow = departments.length === 1
-        ? Math.min(4, Math.max(1, Math.floor((roomW - ROOM_PAD * 2) / SLOT_W)))
-        : COLS_PER_ROW;
+      const seatsPerRow =
+        departments.length === 1 ? Math.min(4, Math.max(1, Math.floor((roomW - ROOM_PAD * 2) / SLOT_W))) : COLS_PER_ROW;
       const acol = agentIdx % seatsPerRow;
       const arow = Math.floor(agentIdx / seatsPerRow);
       const seatsInRow = Math.min(seatsPerRow, deptAgents.length - arow * seatsPerRow);
@@ -250,7 +249,14 @@ function renderAgentHeader(
   nameText.position.set(ax, nameY + 2);
   room.addChild(nameText);
   const statusDot = new Graphics();
-  const statusColor = agent.status === "working" ? 0x59c7a1 : agent.status === "offline" ? 0x84929e : agent.status === "idle" ? 0x6aa4ca : 0xc8a56d;
+  const statusColor =
+    agent.status === "working"
+      ? 0x59c7a1
+      : agent.status === "offline"
+        ? 0x84929e
+        : agent.status === "idle"
+          ? 0x6aa4ca
+          : 0xc8a56d;
   statusDot.circle(ax - nameTagW / 2 - 4, nameY + 6, 2.5).fill(statusColor);
   room.addChild(statusDot);
 

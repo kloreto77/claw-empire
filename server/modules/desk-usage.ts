@@ -23,16 +23,20 @@ export function installDeskUsage(app: Express, db: DatabaseSync): void {
     if (!db.prepare("SELECT 1 FROM agents WHERE id = ?").get(agentId)) {
       return res.status(404).json({ error: "agent_not_found" });
     }
-    const totals = db.prepare(`
+    const totals = db
+      .prepare(
+        `
       SELECT COUNT(*) AS requests, COUNT(total_tokens) AS metered_requests,
         COUNT(cost_usd) AS priced_requests, SUM(input_tokens) AS input_tokens,
         SUM(output_tokens) AS output_tokens, SUM(total_tokens) AS total_tokens,
         SUM(cost_usd) AS cost_usd, SUM(duration_ms) AS duration_ms
       FROM desk_model_usage WHERE agent_id = ?
-    `).get(agentId);
-    const recent = db.prepare(
-      "SELECT * FROM desk_model_usage WHERE agent_id = ? ORDER BY created_at DESC LIMIT 20",
-    ).all(agentId);
+    `,
+      )
+      .get(agentId);
+    const recent = db
+      .prepare("SELECT * FROM desk_model_usage WHERE agent_id = ? ORDER BY created_at DESC LIMIT 20")
+      .all(agentId);
     return res.json({ scope: "direct_openrouter", totals, recent });
   });
 }
