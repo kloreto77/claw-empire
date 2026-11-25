@@ -13,7 +13,7 @@ interface RegisterGracefulShutdownHandlersOptions {
   endTaskExecutionSession: (taskId: string, reason: string) => void;
   wsClients: Set<WsSocket>;
   wss: WebSocketServer;
-  server: { close: (callback: () => void) => void };
+  server: { close: (callback: () => void) => void; closeAllConnections?: () => void };
   onBeforeClose?: () => void;
 }
 
@@ -30,7 +30,11 @@ export function registerGracefulShutdownHandlers({
   server,
   onBeforeClose,
 }: RegisterGracefulShutdownHandlersOptions): void {
+  let stopping = false;
   function gracefulShutdown(signal: string): void {
+    if (stopping) return;
+    stopping = true;
+    const local = process.env.MESA_LOCAL_MODE === "true";
     console.log(`\n[Claw-Empire] ${signal} received. Shutting down gracefully...`);
 
     try {
@@ -39,7 +43,7 @@ export function registerGracefulShutdownHandlers({
       // ignore pre-close cleanup failures
     }
 
-    if (process.env.MESA_LOCAL_MODE === "true") {
+    if (local) {
       recoverLocalDeskTasks(db, nowMs(), "shutdown");
     }
 
@@ -75,16 +79,25 @@ export function registerGracefulShutdownHandlers({
     }
     wsClients.clear();
 
+    // In desktop mode no other users share the loopback server. Release
+    // WebSocket and HTTP connections explicitly instead of waiting for keep-alive.
+    if (local) {
+      for (const ws of wss.clients) ws.terminate();
+    }
     wss.close(() => {
       server.close(() => {
         try {
           db.close();
-        } catch {
-          /* ignore */
+        } catch (error) {
+          if (local) {
+            console.error("[Claw-Empire] Database close failed:", error);
+            process.exit(1);
+          }
         }
         console.log("[Claw-Empire] Shutdown complete.");
         process.exit(0);
       });
+      if (local) server.closeAllConnections?.();
     });
 
     setTimeout(() => {

@@ -281,6 +281,8 @@ function createUpdateBackup() {
 function shutdown(code = 0) {
   if (quitting) return;
   quitting = true;
+  // Disconnect the local renderer before asking the backend to shut down.
+  if (window && !window.isDestroyed()) window.destroy();
   if (!child || stopped) return app.exit(code);
   const timer = setTimeout(() => {
     try {
@@ -304,7 +306,7 @@ function shutdown(code = 0) {
         if (updateSmoke) return app.exit(1);
       }
     }
-    if (updateReady && !cleanForUpdate) report("Update deferred: backend was not confirmed idle.");
+    if (updateReady && !safeToUpdate) report("Update deferred: backend did not confirm a clean idle shutdown.");
     app.exit(code || (smoke && backendCode !== 0 ? 1 : 0));
   });
   if (child.connected) {
@@ -325,7 +327,9 @@ if (!app.requestSingleInstanceLock()) {
     window.show();
     window.focus();
   });
-  app.on("window-all-closed", () => app.quit());
+  app.on("window-all-closed", () => {
+    if (!quitting) app.quit();
+  });
   app.on("before-quit", (event) => {
     if (!quitting) {
       event.preventDefault();
