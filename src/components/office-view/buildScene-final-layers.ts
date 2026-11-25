@@ -54,22 +54,22 @@ export function buildFinalLayers({
     ceoCharacter.addChild(sprite);
   } else {
     const fallback = new Graphics();
-    fallback.circle(0, 0, 18).fill(0xff4d4d);
+    fallback.circle(0, 0, 18).fill(0x45a6a0);
     ceoCharacter.addChild(fallback);
   }
 
-  const crown = new Text({ text: "👑", style: new TextStyle({ fontSize: 14 }) });
+  const crown = new Text({ text: "", style: new TextStyle({ fontSize: 14 }) });
   crown.anchor.set(0.5, 1);
   crown.position.set(0, -CEO_SIZE / 2 + 2);
   ceoCharacter.addChild(crown);
   crownRef.current = crown;
 
   const nameBadge = new Graphics();
-  nameBadge.roundRect(-16, CEO_SIZE / 2 + 1, 32, 11, 3).fill({ color: 0xf0d888, alpha: 0.9 });
+  nameBadge.roundRect(-16, CEO_SIZE / 2 + 1, 32, 11, 3).fill({ color: 0x344653, alpha: 0.9 });
   ceoCharacter.addChild(nameBadge);
   const nameText = new Text({
-    text: "CEO",
-    style: new TextStyle({ fontSize: 7, fill: 0x5a4020, fontWeight: "bold", fontFamily: "monospace" }),
+    text: "CTRL",
+    style: new TextStyle({ fontSize: 7, fill: 0xe0e8ef, fontWeight: "bold", fontFamily: "monospace" }),
   });
   nameText.anchor.set(0.5, 0.5);
   nameText.position.set(0, CEO_SIZE / 2 + 6.5);
