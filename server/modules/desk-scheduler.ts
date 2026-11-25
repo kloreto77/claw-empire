@@ -84,7 +84,13 @@ export function installAgentScheduler(app: Express, db: DatabaseSync): void {
       signal: AbortSignal.timeout(30000),
     });
     if (!response.ok) throw new Error("Dispatch rejected: HTTP " + response.status);
-    return response.json();
+    const payload: unknown = await response.json();
+    if (typeof payload !== "object" || payload === null || Array.isArray(payload)) {
+      throw new Error("Invalid dispatch response");
+    }
+    const result = payload as Record<string, unknown>;
+    if (result.ok === false || result.error) throw new Error("Dispatch rejected by API");
+    return result;
   };
   let ticking = false;
   const tick = async () => {
