@@ -13,13 +13,13 @@ interface SidebarProps {
   connected: boolean;
 }
 
-const NAV_ITEMS: { view: View; icon: string; sprite?: string }[] = [
-  { view: "office", icon: "🏢" },
-  { view: "agents", icon: "👥", sprite: "/sprites/3-D-1.png" },
-  { view: "tasks", icon: "📋" },
-  { view: "dashboard", icon: "📊" },
-  { view: "settings", icon: "⚙️" },
-  { view: "skills", icon: "📚" },
+const NAV_ITEMS: { view: View; icon: string }[] = [
+  { view: "office", icon: "◫" },
+  { view: "agents", icon: "◎" },
+  { view: "tasks", icon: "≡" },
+  { view: "dashboard", icon: "▥" },
+  { view: "settings", icon: "⚙" },
+  { view: "skills", icon: "▤" },
 ];
 
 export default function Sidebar({ currentView, onChangeView, departments, agents, settings, connected }: SidebarProps) {
@@ -32,12 +32,12 @@ export default function Sidebar({ currentView, onChangeView, departments, agents
   const tr = (ko: string, en: string, ja = en, zh = en) => t({ ko, en, ja, zh });
 
   const navLabels: Record<View, string> = {
-    office: tr("오피스", "Office", "オフィス", "办公室"),
-    agents: tr("직원관리", "Agents", "社員管理", "员工管理"),
-    skills: tr("문서고", "Library", "ライブラリ", "文档库"),
-    dashboard: tr("대시보드", "Dashboard", "ダッシュボード", "仪表盘"),
-    tasks: tr("업무 관리", "Tasks", "タスク管理", "任务管理"),
-    settings: tr("설정", "Settings", "設定", "设置"),
+    office: "Mesa",
+    agents: "Agentes",
+    skills: "Biblioteca",
+    dashboard: "Indicadores",
+    tasks: "Operações",
+    settings: "Configurações",
   };
 
   return (
@@ -54,14 +54,15 @@ export default function Sidebar({ currentView, onChangeView, departments, agents
           onClick={() => setCollapsed(!collapsed)}
           className="flex items-center gap-2 hover:opacity-80 transition-opacity"
         >
-          <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 relative overflow-visible">
-            <img
-              src="/sprites/ceo-lobster.png"
-              alt={tr("CEO", "CEO")}
-              className="w-8 h-8 object-contain"
-              style={{ imageRendering: "pixelated" }}
-            />
-            <span className="absolute -top-0.5 left-1/2 -translate-x-1/2 text-[10px] leading-none drop-shadow">👑</span>
+          <div
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md"
+            style={{ background: "#142a35", border: "1px solid #355763", color: "#77c5be" }}
+            aria-hidden="true"
+          >
+            <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M4 4v16h16M7 15l4-4 3 2 5-6" />
+              <path d="M15 7h4v4" />
+            </svg>
           </div>
           {!collapsed && (
             <div className="overflow-hidden">
@@ -69,7 +70,7 @@ export default function Sidebar({ currentView, onChangeView, departments, agents
                 {settings.companyName}
               </div>
               <div className="text-[10px]" style={{ color: "var(--th-text-muted)" }}>
-                👑 {settings.ceoName}
+                Mesa de Operações
               </div>
             </div>
           )}
@@ -87,16 +88,7 @@ export default function Sidebar({ currentView, onChangeView, departments, agents
             }`}
           >
             <span className="text-base shrink-0">
-              {item.sprite ? (
-                <img
-                  src={item.sprite}
-                  alt=""
-                  className="w-5 h-5 object-cover rounded-full"
-                  style={{ imageRendering: "pixelated" }}
-                />
-              ) : (
-                item.icon
-              )}
+              {item.icon}
             </span>
             {!collapsed && <span>{navLabels[item.view]}</span>}
           </button>
