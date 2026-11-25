@@ -72,3 +72,19 @@ jobs:
           assert.equal((await call(schedule)).schedule.enabled,0);
           console.log("V2 smoke passed: catalog isolation, neutral agent execution blocked, disabled schedule persisted.");
           JS
+      - name: Generate reviewed formatting patch
+        if: always()
+        shell: bash
+        run: |
+          pnpm exec prettier --write .github/workflows/mesa-build.yml .github/workflows/mesa-v2-build.yml compose.mesa.yml scripts/mesa-seed.test.ts server/modules/bootstrap/schema/seeds.ts server/modules/lifecycle.ts server/modules/desk-scheduler.ts server/modules/desk-tool-registry.ts server/modules/desk-usage.ts server/modules/routes/core/tasks/execution-control.ts server/modules/routes/core/tasks/execution-run.ts server/modules/workflow/agents/providers/api-provider-tools.ts server/server-main.ts src/app/AppMainLayout.tsx src/components/AgentDetail.tsx src/components/agent-detail/AgentDetailTabContent.tsx src/components/agent-detail/AgentSchedule.tsx src/components/agent-detail/AgentToolRegistry.tsx src/components/agent-detail/AgentUsage.tsx src/components/office-view/buildScene-departments.ts src/components/office-view/buildScene.ts src/components/office-view/drawing-furniture-a.ts src/components/office-view/buildScene-break-room.ts src/components/office-view/buildScene-ceo-hallway.ts src/components/office-view/buildScene-final-layers.ts src/components/office-view/useOfficePixiRuntime.ts src/components/OperationsMonitor.tsx src/components/Sidebar.tsx
+          git diff --binary > /tmp/mesa-v2-format.patch
+          git diff --stat
+          echo MESA_PATCH_BEGIN
+          cat /tmp/mesa-v2-format.patch
+          echo MESA_PATCH_END
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mesa-v2-format-patch
+          path: /tmp/mesa-v2-format.patch
+          if-no-files-found: warn
