@@ -142,6 +142,7 @@ async function startBackend() {
 
 function setupMenu() {
   if (smoke) return;
+  const updateLabel = updateReady ? "Atualização pronta — instalar ao fechar" : "Verificar atualizações";
   Menu.setApplicationMenu(
     Menu.buildFromTemplate([
       {
@@ -154,9 +155,7 @@ function setupMenu() {
             click: (item) => app.setLoginItemSettings({ openAtLogin: item.checked }),
           },
           {
-            label: updateReady
-              ? "Atualização pronta — instalar ao fechar sem tarefas ativas"
-              : "Verificar atualizações",
+            label: updateLabel,
             click: () => {
               if (!updateReady) void checkUpdates(true);
             },
@@ -200,7 +199,10 @@ function configureUpdates() {
     updater.autoInstallOnAppQuit = false;
     updater.allowPrerelease = false;
     updater.allowDowngrade = false;
-    updater.on("error", (error) => report("Updater: " + String(error)));
+    updater.on("error", (error) => {
+      report("Updater: " + String(error));
+      if (updateSmoke) fail(error);
+    });
     updater.on("update-downloaded", () => {
       updateReady = true;
       report("Update ready; waiting for clean idle shutdown.");
@@ -288,7 +290,8 @@ function shutdown(code = 0) {
   }, 8000);
   child.once("exit", (backendCode) => {
     clearTimeout(timer);
-    if (code === 0 && backendCode === 0 && updateReady && cleanForUpdate && updater && (!smoke || updateSmoke)) {
+    const safeToUpdate = code === 0 && backendCode === 0 && updateReady && cleanForUpdate;
+    if (safeToUpdate && updater && (!smoke || updateSmoke)) {
       report("Applying downloaded update after clean idle shutdown.");
       try {
         createUpdateBackup();
@@ -336,10 +339,9 @@ if (!app.requestSingleInstanceLock()) {
       if (smoke) {
         if (agents.length !== 8) throw new Error("Expected eight initial agents.");
         let rendered = false;
+        const script = "Boolean(document.querySelector('#root')?.childElementCount)";
         for (let i = 0; i < 40 && !rendered; i++) {
-          rendered = await window.webContents.executeJavaScript(
-            "Boolean(document.querySelector('#root')?.childElementCount)",
-          );
+          rendered = await window.webContents.executeJavaScript(script);
           if (!rendered) await new Promise((resolve) => setTimeout(resolve, 250));
         }
         if (!rendered) throw new Error("UI did not render.");

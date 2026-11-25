@@ -61,6 +61,11 @@ jobs:
         run: npm install --no-audit --no-fund
       - name: Format desktop sources
         run: pnpm exec prettier --check desktop/main.cjs desktop/backend.mjs desktop/after-pack.cjs desktop/package.json .github/workflows/mesa-windows.yml
+      - name: Show exact desktop formatting differences
+        if: failure()
+        run: |
+          pnpm exec prettier --write desktop/main.cjs
+          git diff -- desktop/main.cjs
       - name: Package Windows installer
         working-directory: desktop
         run: npx --no-install electron-builder --win nsis --x64 --publish never

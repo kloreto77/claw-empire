@@ -41,7 +41,7 @@ try {
   $listener.Start()
   $port = $listener.LocalEndpoint.Port
   $listener.Stop()
-  $server = Start-Process -FilePath python -ArgumentList @('-m','http.server',"$port",'--bind','127.0.0.1','--directory',$release) -PassThru -RedirectStandardOutput (Join-Path $root 'feed.stdout.log') -RedirectStandardError (Join-Path $root 'feed.stderr.log')
+  $server = Start-Process -FilePath python -WorkingDirectory $release -ArgumentList @('-m','http.server',"$port",'--bind','127.0.0.1') -PassThru -RedirectStandardOutput (Join-Path $root 'feed.stdout.log') -RedirectStandardError (Join-Path $root 'feed.stderr.log')
   $env:MESA_UPDATE_TEST_FEED = "http://127.0.0.1:$port/"
   $feedReady = $false
   for ($i=0; $i -lt 30; $i++) {

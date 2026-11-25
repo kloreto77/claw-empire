@@ -96,6 +96,11 @@ jobs:
       - name: Run format check
         run: pnpm run format:check
 
+      - name: Show exact desktop formatting differences
+        if: failure()
+        run: |
+          pnpm exec prettier --write desktop/main.cjs
+          git diff -- desktop/main.cjs
       - name: Run lint
         run: pnpm run lint
 
