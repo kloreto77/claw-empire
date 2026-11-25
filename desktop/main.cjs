@@ -245,7 +245,9 @@ async function openWindow() {
   window.webContents.on("will-redirect", (event, target) => {
     if (new URL(target).origin !== origin) event.preventDefault();
   });
-  window.webContents.on("render-process-gone", (_event, details) => report("Renderer gone: " + JSON.stringify(details)));
+  window.webContents.on("render-process-gone", (_event, details) => {
+    report("Renderer gone: " + JSON.stringify(details));
+  });
   await window.loadURL(origin);
   report("Desktop page loaded");
   if (!smoke) window.show();
