@@ -8,8 +8,6 @@ import {
   blendColor,
   drawAmbientGlow,
   drawBandGradient,
-  drawBunting,
-  drawPictureFrame,
   drawRoomAtmosphere,
   drawTiledFloor,
   drawWallClock,
@@ -54,12 +52,12 @@ export function buildCeoAndHallway({
   ceoOfficeRectRef,
 }: BuildCeoAndHallwayParams): void {
   const bg = new Graphics();
-  const bgFill = isDark ? 0x0e0e1c : 0xf5f0e8;
-  const bgGradFrom = isDark ? 0x121222 : 0xf8f4ec;
-  const bgGradTo = isDark ? 0x0a0a18 : 0xf0ece4;
-  const bgStrokeInner = isDark ? 0x2a2a48 : 0xd8cfc0;
-  const bgStrokeOuter = isDark ? 0x222240 : 0xe0d8cc;
-  const bgDotColor = isDark ? 0x2a2a48 : 0xd0c8b8;
+  const bgFill = isDark ? 0x101a23 : 0xe8edf1;
+  const bgGradFrom = isDark ? 0x182630 : 0xf1f4f6;
+  const bgGradTo = isDark ? 0x0d151d : 0xdce3e8;
+  const bgStrokeInner = isDark ? 0x344653 : 0xa7b5bf;
+  const bgStrokeOuter = isDark ? 0x243540 : 0xb9c6cf;
+  const bgDotColor = isDark ? 0x344653 : 0xb9c6cf;
   bg.roundRect(0, 0, OFFICE_W, totalH, 6).fill(bgFill);
   drawBandGradient(bg, 2, 2, OFFICE_W - 4, totalH - 4, bgGradFrom, bgGradTo, 14, 0.82);
   bg.roundRect(2, 2, OFFICE_W - 4, totalH - 4, 5).stroke({ width: 1.5, color: bgStrokeInner, alpha: 0.55 });
@@ -87,7 +85,7 @@ export function buildCeoAndHallway({
   ceoLayer.addChild(ceoBorder);
 
   const ceoLabel = new Text({
-    text: pickLocale(activeLocale, LOCALE_TEXT.ceoOffice),
+    text: "CONTROLE",
     style: new TextStyle({
       fontSize: 10,
       fill: 0xffffff,
@@ -106,24 +104,15 @@ export function buildCeoAndHallway({
   ceoLabel.position.set(12, 8);
   ceoLayer.addChild(ceoLabelBg);
   ceoLayer.addChild(ceoLabel);
-  drawBunting(
-    ceoLayer,
-    148,
-    11,
-    Math.max(120, OFFICE_W - 300),
-    blendColor(ceoTheme.accent, 0xffffff, 0.2),
-    blendColor(ceoTheme.wall, ceoTheme.accent, 0.45),
-    0.7,
-  );
 
   const cdx = 50;
   const cdy = 28;
   const cdg = new Graphics();
-  const deskEdge = isDark ? 0x3a2a18 : 0xb8925c;
-  const deskTop = isDark ? 0x4a3828 : 0xd0a870;
+  const deskEdge = isDark ? 0x22313e : 0x8294a4;
+  const deskTop = isDark ? 0x354b5b : 0xa7b5bf;
   const monitorFrame = isDark ? 0x1a1a2a : 0x2a2a3a;
   const monitorScreen = isDark ? 0x2255aa : 0x4488cc;
-  const namePlate = isDark ? 0x5a4820 : 0xe8c060;
+  const namePlate = isDark ? 0x45a6a0 : 0x9cc7c6;
   cdg.roundRect(cdx, cdy, 64, 34, 3).fill(deskEdge);
   cdg.roundRect(cdx + 1, cdy + 1, 62, 32, 2).fill(deskTop);
   cdg.roundRect(cdx + 19, cdy + 2, 26, 16, 2).fill(monitorFrame);
@@ -131,22 +120,22 @@ export function buildCeoAndHallway({
   cdg.roundRect(cdx + 22, cdy + 24, 20, 7, 2).fill(namePlate);
   ceoLayer.addChild(cdg);
   const ceoPlateText = new Text({
-    text: "CEO",
+    text: "CTRL",
     style: new TextStyle({ fontSize: 5, fill: 0x000000, fontWeight: "bold", fontFamily: "monospace" }),
   });
   ceoPlateText.anchor.set(0.5, 0.5);
   ceoPlateText.position.set(cdx + 32, cdy + 27.5);
   ceoLayer.addChild(ceoPlateText);
-  drawChair(ceoLayer, cdx + 32, cdy + 46, 0xd4a860);
+  drawChair(ceoLayer, cdx + 32, cdy + 46, 0x657b8b);
 
   const mtW = 220;
   const mtH = 28;
   const mtX = Math.floor((OFFICE_W - mtW) / 2);
   const mtY = 48;
   const mt = new Graphics();
-  const tableEdge = isDark ? 0x2a2018 : 0xb89060;
-  const tableTop = isDark ? 0x382818 : 0xd0a878;
-  const tableInlay = isDark ? 0x4a3828 : 0xf7e4c0;
+  const tableEdge = isDark ? 0x22313e : 0x8294a4;
+  const tableTop = isDark ? 0x354b5b : 0xa7b5bf;
+  const tableInlay = isDark ? 0x354b5b : 0xdce3e8;
   mt.roundRect(mtX, mtY, mtW, mtH, 12).fill(tableEdge);
   mt.roundRect(mtX + 3, mtY + 3, mtW - 6, mtH - 6, 10).fill(tableTop);
   mt.roundRect(mtX + 64, mtY + 8, 92, 12, 5).fill({ color: tableInlay, alpha: isDark ? 0.3 : 0.45 });
@@ -162,15 +151,15 @@ export function buildCeoAndHallway({
 
   const meetingSeatX = [mtX + 40, mtX + 110, mtX + 180];
   for (const sx of meetingSeatX) {
-    drawChair(ceoLayer, sx, mtY - 4, 0xc4a070);
-    drawChair(ceoLayer, sx, mtY + mtH + 10, 0xc4a070);
+    drawChair(ceoLayer, sx, mtY - 4, 0x657b8b);
+    drawChair(ceoLayer, sx, mtY + mtH + 10, 0x657b8b);
   }
 
   const meetingLabel = new Text({
-    text: pickLocale(activeLocale, LOCALE_TEXT.collabTable),
+    text: "COORDENAÇÃO",
     style: new TextStyle({
       fontSize: 7,
-      fill: 0x7a5c2a,
+      fill: 0xcedde5,
       fontWeight: "bold",
       fontFamily: "monospace",
       letterSpacing: 1,
@@ -205,7 +194,6 @@ export function buildCeoAndHallway({
     }
   }
 
-  drawPictureFrame(ceoLayer, 14, 14);
   wallClocksRef.current.push(drawWallClock(ceoLayer, OFFICE_W - 30, 18));
 
   const workingCount = agents.filter((agent) => agent.status === "working").length;
@@ -233,12 +221,12 @@ export function buildCeoAndHallway({
       val: `${doneCount}/${tasks.length}`,
     },
   ];
-  stats.forEach((stat, index) => {
+  if (OFFICE_W >= 720) stats.forEach((stat, index) => {
     const sx = OFFICE_W - 340 + index * 82;
     const sy = 12;
     const statCard = new Graphics();
-    statCard.roundRect(sx, sy, 74, 26, 4).fill({ color: 0xfff4d8, alpha: 0.85 });
-    statCard.roundRect(sx, sy, 74, 26, 4).stroke({ width: 1, color: 0xe8c870, alpha: 0.5 });
+    statCard.roundRect(sx, sy, 74, 26, 4).fill({ color: 0x243540, alpha: 0.85 });
+    statCard.roundRect(sx, sy, 74, 26, 4).stroke({ width: 1, color: 0x657b8b, alpha: 0.5 });
     ceoLayer.addChild(statCard);
     const iconText = new Text({ text: stat.icon, style: new TextStyle({ fontSize: 10 }) });
     iconText.position.set(sx + 4, sy + 4);
@@ -247,7 +235,7 @@ export function buildCeoAndHallway({
       Object.assign(
         new Text({
           text: stat.label,
-          style: new TextStyle({ fontSize: 7, fill: 0x8b7040, fontFamily: "monospace" }),
+          style: new TextStyle({ fontSize: 7, fill: 0x91a9ba, fontFamily: "monospace" }),
         }),
         { x: sx + 18, y: sy + 2 },
       ),
@@ -256,7 +244,7 @@ export function buildCeoAndHallway({
       Object.assign(
         new Text({
           text: stat.val,
-          style: new TextStyle({ fontSize: 10, fill: 0x5a4020, fontWeight: "bold", fontFamily: "monospace" }),
+          style: new TextStyle({ fontSize: 10, fill: 0xe0e8ef, fontWeight: "bold", fontFamily: "monospace" }),
         }),
         { x: sx + 18, y: sy + 13 },
       ),
@@ -268,25 +256,26 @@ export function buildCeoAndHallway({
     style: new TextStyle({
       fontSize: 10,
       fontWeight: "bold",
-      fill: 0x8b7040,
+      fill: 0x91a9ba,
       fontFamily: "monospace",
     }),
   });
   hint.anchor.set(1, 1);
   hint.position.set(OFFICE_W - 16, CEO_ZONE_H - 8);
-  ceoLayer.addChild(hint);
+  // The main interface already exposes direct agent controls.
+  hint.visible = false;
   if (activeMeetingTaskId) {
     const meetingHint = new Text({
       text: pickLocale(activeLocale, LOCALE_TEXT.meetingTableHint),
       style: new TextStyle({
         fontSize: 12,
-        fill: 0x8b6b30,
+        fill: 0x91a9ba,
         fontWeight: "bold",
         fontFamily: "system-ui, sans-serif",
       }),
     });
     meetingHint.anchor.set(1, 1);
-    meetingHint.position.set(hint.position.x - hint.width - 18, hint.position.y);
+    meetingHint.position.set(OFFICE_W - 16, CEO_ZONE_H - 8);
     ceoLayer.addChild(meetingHint);
   }
 
@@ -301,12 +290,12 @@ export function buildCeoAndHallway({
 
   const hallY = CEO_ZONE_H;
   const hallG = new Graphics();
-  const hallBase = isDark ? 0x252535 : 0xe8dcc8;
-  const hallTile1 = isDark ? 0x2d2d40 : 0xf0e4d0;
-  const hallTile2 = isDark ? 0x1f1f30 : 0xe8dcc8;
-  const hallDash = isDark ? 0x3a3858 : 0xc8b898;
-  const hallTrim = isDark ? 0x3a3858 : 0xd4c4a8;
-  const hallGlow = isDark ? 0x3355bb : 0xfff8e0;
+  const hallBase = isDark ? 0x1a2b36 : 0xdce3e8;
+  const hallTile1 = isDark ? 0x243540 : 0xe7ebef;
+  const hallTile2 = isDark ? 0x14202b : 0xdce3e8;
+  const hallDash = isDark ? 0x344653 : 0xa7b5bf;
+  const hallTrim = isDark ? 0x344653 : 0xb9c6cf;
+  const hallGlow = isDark ? 0x45a6a0 : 0xdce3e8;
   hallG.rect(4, hallY, OFFICE_W - 8, HALLWAY_H).fill(hallBase);
   drawBandGradient(hallG, 4, hallY, OFFICE_W - 8, HALLWAY_H, hallTile1, hallTile2, 5, 0.38);
   for (let dx = 4; dx < OFFICE_W - 4; dx += TILE * 2) {
