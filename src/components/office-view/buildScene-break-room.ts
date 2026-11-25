@@ -9,11 +9,9 @@ import {
   blendColor,
   contrastTextColor,
   drawAmbientGlow,
-  drawBunting,
   drawCeilingLight,
   drawPictureFrame,
   drawRoomAtmosphere,
-  drawRug,
   drawTiledFloor,
   drawTrashCan,
   drawWallClock,
@@ -83,26 +81,17 @@ export function buildBreakRoom({
   drawAmbientGlow(breakRoom, brx + brw / 2, bry + brh / 2, brw * 0.3, breakTheme.accent, 0.05);
   drawCeilingLight(breakRoom, brx + brw / 3, bry + 6, breakTheme.accent);
   drawCeilingLight(breakRoom, brx + (brw * 2) / 3, bry + 6, breakTheme.accent);
-  drawBunting(
-    breakRoom,
-    brx + 14,
-    bry + 16,
-    brw - 28,
-    blendColor(0xb5d6cf, 0xffffff, 0.18),
-    blendColor(0xdcb7bf, 0xffffff, 0.08),
-    0.64,
-  );
 
   const furnitureBaseX = brx + 16;
   drawCoffeeMachine(breakRoom, furnitureBaseX, bry + 20);
   drawPlant(breakRoom, furnitureBaseX + 30, bry + 38, 1);
-  drawSofa(breakRoom, furnitureBaseX + 50, bry + 56, 0xc89da6);
+  drawSofa(breakRoom, furnitureBaseX + 50, bry + 56, 0x657b8b);
   drawCoffeeTable(breakRoom, furnitureBaseX + 140, bry + 58);
 
   const furnitureRightX = brx + brw - 16;
   drawVendingMachine(breakRoom, furnitureRightX - 26, bry + 20);
   drawPlant(breakRoom, furnitureRightX - 36, bry + 38, 2);
-  drawSofa(breakRoom, furnitureRightX - 120, bry + 56, 0x91bcae);
+  drawSofa(breakRoom, furnitureRightX - 120, bry + 56, 0x527b85);
   drawHighTable(breakRoom, furnitureRightX - 170, bry + 24);
 
   drawPictureFrame(breakRoom, brx + brw / 2 - 8, bry + 14);
@@ -116,7 +105,7 @@ export function buildBreakRoom({
   breakRoom.addChild(brSignBg);
   const breakSignTextColor = isDark ? 0xffffff : contrastTextColor(breakTheme.accent);
   const brSignTxt = new Text({
-    text: pickLocale(activeLocale, LOCALE_TEXT.breakRoom),
+    text: "APOIO",
     style: new TextStyle({
       fontSize: 9,
       fill: breakSignTextColor,
@@ -129,7 +118,6 @@ export function buildBreakRoom({
   brSignTxt.position.set(brx + brw / 2, bry + 5);
   breakRoom.addChild(brSignTxt);
 
-  drawRug(breakRoom, brx + brw / 2, bry + brh / 2 + 10, brw * 0.5, brh * 0.45, breakTheme.accent);
 
   const steamContainer = new Container();
   breakRoom.addChild(steamContainer);
