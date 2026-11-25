@@ -1,0 +1,31 @@
+# Standalone trading desk. Run with: docker compose -f compose.mesa.yml up -d --build
+services:
+  mesa:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      HOST: 0.0.0.0
+      PORT: "8790"
+      APP_DATA_DIR: /app/data
+      DB_PATH: /app/data/mesa.sqlite
+      LOGS_DIR: /app/data/logs
+      API_AUTH_TOKEN: ${API_AUTH_TOKEN:?Set API_AUTH_TOKEN in .env}
+      OAUTH_ENCRYPTION_SECRET: ${OAUTH_ENCRYPTION_SECRET:?Set OAUTH_ENCRYPTION_SECRET in .env}
+    ports:
+      - "127.0.0.1:${MESA_HOST_PORT:-8791}:8790"
+    volumes:
+      - mesa_data:/app/data
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8790/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 4
+      start_period: 90s
+volumes:
+  mesa_data:
