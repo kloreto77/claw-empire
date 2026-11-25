@@ -67,3 +67,8 @@ Thumbs.db
 
 # Playwright artifacts
 test-results/
+
+# Desktop packaging artifacts
+.desktop-runtime/
+desktop-release/
+desktop-diagnostics/

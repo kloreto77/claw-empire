@@ -221,35 +221,36 @@ export function buildCeoAndHallway({
       val: `${doneCount}/${tasks.length}`,
     },
   ];
-  if (OFFICE_W >= 720) stats.forEach((stat, index) => {
-    const sx = OFFICE_W - 340 + index * 82;
-    const sy = 12;
-    const statCard = new Graphics();
-    statCard.roundRect(sx, sy, 74, 26, 4).fill({ color: 0x243540, alpha: 0.85 });
-    statCard.roundRect(sx, sy, 74, 26, 4).stroke({ width: 1, color: 0x657b8b, alpha: 0.5 });
-    ceoLayer.addChild(statCard);
-    const iconText = new Text({ text: stat.icon, style: new TextStyle({ fontSize: 10 }) });
-    iconText.position.set(sx + 4, sy + 4);
-    ceoLayer.addChild(iconText);
-    ceoLayer.addChild(
-      Object.assign(
-        new Text({
-          text: stat.label,
-          style: new TextStyle({ fontSize: 7, fill: 0x91a9ba, fontFamily: "monospace" }),
-        }),
-        { x: sx + 18, y: sy + 2 },
-      ),
-    );
-    ceoLayer.addChild(
-      Object.assign(
-        new Text({
-          text: stat.val,
-          style: new TextStyle({ fontSize: 10, fill: 0xe0e8ef, fontWeight: "bold", fontFamily: "monospace" }),
-        }),
-        { x: sx + 18, y: sy + 13 },
-      ),
-    );
-  });
+  if (OFFICE_W >= 720)
+    stats.forEach((stat, index) => {
+      const sx = OFFICE_W - 340 + index * 82;
+      const sy = 12;
+      const statCard = new Graphics();
+      statCard.roundRect(sx, sy, 74, 26, 4).fill({ color: 0x243540, alpha: 0.85 });
+      statCard.roundRect(sx, sy, 74, 26, 4).stroke({ width: 1, color: 0x657b8b, alpha: 0.5 });
+      ceoLayer.addChild(statCard);
+      const iconText = new Text({ text: stat.icon, style: new TextStyle({ fontSize: 10 }) });
+      iconText.position.set(sx + 4, sy + 4);
+      ceoLayer.addChild(iconText);
+      ceoLayer.addChild(
+        Object.assign(
+          new Text({
+            text: stat.label,
+            style: new TextStyle({ fontSize: 7, fill: 0x91a9ba, fontFamily: "monospace" }),
+          }),
+          { x: sx + 18, y: sy + 2 },
+        ),
+      );
+      ceoLayer.addChild(
+        Object.assign(
+          new Text({
+            text: stat.val,
+            style: new TextStyle({ fontSize: 10, fill: 0xe0e8ef, fontWeight: "bold", fontFamily: "monospace" }),
+          }),
+          { x: sx + 18, y: sy + 13 },
+        ),
+      );
+    });
 
   const hint = new Text({
     text: pickLocale(activeLocale, LOCALE_TEXT.hint),

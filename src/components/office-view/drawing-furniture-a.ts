@@ -15,7 +15,9 @@ function drawDesk(parent: Container, dx: number, dy: number, working: boolean): 
   }
   g.roundRect(dx, dy, DESK_W, DESK_H, 2).fill(edge);
   g.roundRect(dx + 1, dy + 1, DESK_W - 2, DESK_H - 3, 1).fill(surface);
-  g.moveTo(dx + 2, dy + 1).lineTo(dx + DESK_W - 2, dy + 1).stroke({ color: 0xb3c1ca, width: 0.5, alpha: 0.65 });
+  g.moveTo(dx + 2, dy + 1)
+    .lineTo(dx + DESK_W - 2, dy + 1)
+    .stroke({ color: 0xb3c1ca, width: 0.5, alpha: 0.65 });
 
   // Two compact workstation displays. The glyphs indicate activity, not market prices.
   const monitorW = (DESK_W - 8) / 2;
@@ -29,7 +31,10 @@ function drawDesk(parent: Container, dx: number, dy: number, working: boolean): 
     if (working) {
       for (let row = 0; row < 3; row++) {
         const lineWidth = (monitorW - 6) * (row === 1 ? 0.6 : 0.9);
-        g.rect(mx + 3, my + 3 + row * 2.4, lineWidth, 0.8).fill({ color: index === 0 ? 0x75b7ca : indicator, alpha: 0.8 });
+        g.rect(mx + 3, my + 3 + row * 2.4, lineWidth, 0.8).fill({
+          color: index === 0 ? 0x75b7ca : indicator,
+          alpha: 0.8,
+        });
       }
     }
     g.circle(mx + monitorW - 2.5, my + 11.5, 0.65).fill(indicator);

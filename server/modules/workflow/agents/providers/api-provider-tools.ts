@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { randomUUID } from "node:crypto";
 import path from "node:path";
 import type { ChildProcess } from "node:child_process";
 import { decryptSecret } from "../../../../oauth/helpers.ts";
@@ -7,6 +8,7 @@ import type { ApiProviderRow } from "./types.ts";
 type DbLike = {
   prepare: (sql: string) => {
     get: (...args: any[]) => unknown;
+    run?: (...args: any[]) => unknown;
   };
 };
 
@@ -181,6 +183,7 @@ export function createApiProviderTools(deps: CreateApiProviderToolsDeps) {
           { role: "user", content: prompt },
         ],
         stream: true,
+        ...(provider.type === "openrouter" ? { usage: { include: true } } : {}),
       }),
     };
   }
@@ -216,24 +219,95 @@ export function createApiProviderTools(deps: CreateApiProviderToolsDeps) {
 
     const req = buildApiProviderRequest(provider, model, prompt, projectPath);
 
-    const resp = await fetch(req.url, {
-      method: "POST",
-      headers: req.headers,
-      body: req.body,
-      signal,
-    });
+    const usageStart = Date.now();
+    const owner =
+      taskId && provider.type === "openrouter"
+        ? (db.prepare("SELECT assigned_agent_id FROM tasks WHERE id = ?").get(taskId) as
+            | { assigned_agent_id?: string }
+            | undefined)
+        : undefined;
+    const usage: Record<string, number> = {};
+    const consumeLine = (line: string) => {
+      if (!line.startsWith("data:")) return;
+      try {
+        const data = JSON.parse(line.slice(5).trim());
+        if (data.usage && typeof data.usage === "object") {
+          for (const key of ["prompt_tokens", "completion_tokens", "total_tokens", "cost"]) {
+            if (typeof data.usage[key] === "number" && Number.isFinite(data.usage[key]) && data.usage[key] >= 0) {
+              usage[key] = data.usage[key];
+            }
+          }
+        }
+      } catch {
+        /* SSE comments and completion markers are not usage. */
+      }
+    };
+    try {
+      const resp = await fetch(req.url, {
+        method: "POST",
+        headers: req.headers,
+        body: req.body,
+        signal,
+      });
 
-    if (!resp.ok) {
-      const text = await resp.text();
-      throw new Error(`API provider '${provider.name}' error (${resp.status}): ${text}`);
-    }
+      if (!resp.ok) {
+        const text = await resp.text();
+        throw new Error(`API provider '${provider.name}' error (${resp.status}): ${text}`);
+      }
 
-    if (provider.type === "anthropic") {
-      await parseAnthropicSSEStream(resp.body!, signal, safeWrite, taskId);
-    } else if (provider.type === "google") {
-      await parseGeminiSSEStream(resp.body!, signal, safeWrite, taskId);
-    } else {
-      await parseSSEStream(resp.body!, signal, safeWrite, taskId);
+      if (provider.type === "anthropic") {
+        await parseAnthropicSSEStream(resp.body!, signal, safeWrite, taskId);
+      } else if (provider.type === "google") {
+        await parseGeminiSSEStream(resp.body!, signal, safeWrite, taskId);
+      } else {
+        let body = resp.body!;
+        if (owner?.assigned_agent_id) {
+          const decoder = new TextDecoder();
+          let buffer = "";
+          body = body.pipeThrough(
+            new TransformStream<Uint8Array, Uint8Array>({
+              transform(chunk, controller) {
+                buffer += decoder.decode(chunk, { stream: true });
+                const lines = buffer.split("\n");
+                buffer = lines.pop() ?? "";
+                for (const line of lines) consumeLine(line.trim());
+                controller.enqueue(chunk);
+              },
+              flush() {
+                buffer += decoder.decode();
+                if (buffer.trim()) consumeLine(buffer.trim());
+              },
+            }),
+          );
+        }
+        await parseSSEStream(body, signal, safeWrite, taskId);
+      }
+    } finally {
+      if (owner?.assigned_agent_id && taskId) {
+        try {
+          db.prepare(
+            `
+            INSERT INTO desk_model_usage
+              (id, agent_id, task_id, provider, model, input_tokens, output_tokens, total_tokens, cost_usd, duration_ms, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `,
+          ).run?.(
+            randomUUID(),
+            owner.assigned_agent_id,
+            taskId,
+            "openrouter",
+            model,
+            usage.prompt_tokens ?? null,
+            usage.completion_tokens ?? null,
+            usage.total_tokens ?? null,
+            usage.cost ?? null,
+            Math.max(0, Date.now() - usageStart),
+            Date.now(),
+          );
+        } catch (error) {
+          console.error("[Mesa usage] Could not persist provider usage", error);
+        }
+      }
     }
 
     safeWrite(`\n---\n[api:${provider.type}] Done.\n`);

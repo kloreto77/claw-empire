@@ -322,7 +322,13 @@ export function registerAgentCrudRoutes(ctx: RuntimeContext): void {
         typeof body.cli_provider === "string" &&
         ["claude", "codex", "gemini", "opencode", "kimi", "copilot", "antigravity", "api"].includes(body.cli_provider)
           ? body.cli_provider
-          : "claude";
+          : null;
+      const api_provider_id = cli_provider === "api" ? normalizeText(body.api_provider_id) || null : null;
+      const api_model = cli_provider === "api" ? normalizeText(body.api_model) || null : null;
+      const cli_model = cli_provider === "opencode" ? normalizeText(body.cli_model) || null : null;
+      if (api_provider_id && !db.prepare("SELECT id FROM api_providers WHERE id = ?").get(api_provider_id)) {
+        return res.status(400).json({ error: "api_provider_not_found" });
+      }
       const avatar_emoji =
         typeof body.avatar_emoji === "string" && body.avatar_emoji.trim() ? body.avatar_emoji.trim() : "🤖";
       const sprite_number =
@@ -333,8 +339,8 @@ export function registerAgentCrudRoutes(ctx: RuntimeContext): void {
       try {
         if (hasAgentWorkflowPackColumn) {
           db.prepare(
-            `INSERT INTO agents (id, name, name_ko, name_ja, name_zh, department_id, workflow_pack_key, role, cli_provider, avatar_emoji, sprite_number, personality)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            `INSERT INTO agents (id, name, name_ko, name_ja, name_zh, department_id, workflow_pack_key, role, cli_provider, api_provider_id, api_model, cli_model, avatar_emoji, sprite_number, personality)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           ).run(
             id,
             name,
@@ -345,14 +351,17 @@ export function registerAgentCrudRoutes(ctx: RuntimeContext): void {
             workflowPackKey,
             role,
             cli_provider,
+            api_provider_id,
+            api_model,
+            cli_model,
             avatar_emoji,
             sprite_number,
             personality,
           );
         } else {
           db.prepare(
-            `INSERT INTO agents (id, name, name_ko, name_ja, name_zh, department_id, role, cli_provider, avatar_emoji, sprite_number, personality)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            `INSERT INTO agents (id, name, name_ko, name_ja, name_zh, department_id, role, cli_provider, api_provider_id, api_model, cli_model, avatar_emoji, sprite_number, personality)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           ).run(
             id,
             name,
@@ -362,6 +371,9 @@ export function registerAgentCrudRoutes(ctx: RuntimeContext): void {
             department_id,
             role,
             cli_provider,
+            api_provider_id,
+            api_model,
+            cli_model,
             avatar_emoji,
             sprite_number,
             personality,

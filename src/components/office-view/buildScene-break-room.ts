@@ -118,7 +118,6 @@ export function buildBreakRoom({
   brSignTxt.position.set(brx + brw / 2, bry + 5);
   breakRoom.addChild(brSignTxt);
 
-
   const steamContainer = new Container();
   breakRoom.addChild(steamContainer);
   breakSteamParticlesRef.current = steamContainer;
