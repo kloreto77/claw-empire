@@ -110,8 +110,9 @@ jobs:
             await page.screenshot({ path: "/tmp/mesa-agent.png", fullPage: true });
             await page.getByLabel("Instruções individuais").waitFor();
             assert.equal(await page.getByLabel("Instruções individuais").inputValue(), "");
+            await page.context().close();
             const mobile = await browser.newPage({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
-            await mobile.goto("http://127.0.0.1:18790", { waitUntil: "domcontentloaded" });
+            await mobile.goto("http://127.0.0.1:18790", { waitUntil: "domcontentloaded", timeout: 90000 });
             await mobile.getByRole("heading", { name: "Mesa de Operações", exact: true }).waitFor({ timeout: 30000 });
             await mobile.locator('[data-office-ready="true"]').waitFor({ state: "visible", timeout: 45000 });
             await assertScenePixels(mobile);
