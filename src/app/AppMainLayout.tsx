@@ -395,7 +395,7 @@ export default function AppMainLayout({
             onOpenAnnouncement={onOpenAnnouncement}
             onOpenRoomManager={onOpenRoomManager}
             officePackControl={
-              view === "office" || view === "agents" || view === "tasks"
+              view === "agents" || view === "tasks"
                 ? {
                     label: officePackLabel,
                     value: officePackKey,
@@ -469,6 +469,54 @@ export default function AppMainLayout({
           )}
 
           <div className="p-3 sm:p-4 lg:p-6">
+            {view === "office" && (
+              <section
+                aria-label="Resumo da mesa de operações"
+                className="mb-4 rounded-xl border p-3 sm:p-4"
+                style={{ borderColor: "var(--th-border)", background: "var(--th-bg-surface)" }}
+              >
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h2 className="text-base font-semibold" style={{ color: "var(--th-text-heading)" }}>
+                      Mesa de Operações
+                    </h2>
+                    <p className="mt-1 text-xs" style={{ color: "var(--th-text-muted)" }}>
+                      {connected ? "Servidor conectado" : "Servidor desconectado — dados podem estar desatualizados"}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <button type="button" className="header-action-btn header-action-btn-primary" onClick={() => setView("agents")}>
+                      Gerenciar agentes
+                    </button>
+                    <button type="button" className="header-action-btn header-action-btn-secondary" onClick={() => setView("tasks")}>
+                      Operações
+                    </button>
+                    <button type="button" className="header-action-btn header-action-btn-secondary" onClick={() => setView("settings")}>
+                      Conexões e modelos
+                    </button>
+                  </div>
+                </div>
+                <dl className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                  {[
+                    { label: "Agentes no escritório", value: officePresentation.agents.length },
+                    { label: "Trabalhando", value: officePresentation.agents.filter((agent) => agent.status === "working").length },
+                    { label: "Disponíveis", value: officePresentation.agents.filter((agent) => agent.status === "idle").length },
+                    { label: "Tarefas registradas", value: tasksForActivePack.length },
+                  ].map(({ label, value }) => (
+                    <div key={label} className="rounded-lg border px-3 py-2" style={{ borderColor: "var(--th-border)" }}>
+                      <dt className="text-xs" style={{ color: "var(--th-text-muted)" }}>{label}</dt>
+                      <dd className="mt-1 text-xl font-semibold tabular-nums" style={{ color: "var(--th-text-heading)" }}>{value}</dd>
+                    </div>
+                  ))}
+                </dl>
+                {officePresentation.agents.length === 0 && (
+                  <p className="mt-3 text-xs" style={{ color: "var(--th-text-muted)" }}>
+                    Nenhum agente neste escritório. Use Gerenciar agentes para configurar o primeiro quando quiser.
+                  </p>
+                )}
+              </section>
+            )}
+
             {view === "office" && (
               <OfficeView
                 departments={officePresentation.departments}
