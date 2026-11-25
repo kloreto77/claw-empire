@@ -14,6 +14,7 @@ import type {
 } from "../types";
 import AgentAvatar from "./AgentAvatar";
 import AgentDetailTabContent from "./agent-detail/AgentDetailTabContent";
+import AgentSchedule from "./agent-detail/AgentSchedule";
 import { CLI_LABELS, oauthAccountLabel, roleLabel, STATUS_CONFIG, statusLabel } from "./agent-detail/constants";
 
 interface AgentDetailProps {
@@ -839,6 +840,7 @@ export default function AgentDetail({
               </button>
             </section>
           )}
+          {tab === "info" && <AgentSchedule key={agent.id} agent={agent} tasks={agentTasks} />}
           <AgentDetailTabContent
             tab={tab}
             t={t}
