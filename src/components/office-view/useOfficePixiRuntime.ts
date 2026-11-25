@@ -65,6 +65,7 @@ export function useOfficePixiRuntime({
     if (!element) return;
 
     destroyedRef.current = false;
+    element.dataset.officeReady = "loading";
     const currentInitId = ++initIdRef.current;
     scrollHostXRef.current = findScrollContainer(element, "x");
     scrollHostYRef.current = findScrollContainer(element, "y");
@@ -79,7 +80,9 @@ export function useOfficePixiRuntime({
       await app.init({
         width: officeWRef.current,
         height: 600,
-        backgroundAlpha: 0,
+        backgroundAlpha: 1,
+        background: 0x111b25,
+        preference: "webgl",
         antialias: false,
         resolution: Math.min(window.devicePixelRatio || 1, 2),
         autoDensity: true,
@@ -95,6 +98,8 @@ export function useOfficePixiRuntime({
       appRef.current = app;
       const canvas = app.canvas as HTMLCanvasElement;
       canvas.style.imageRendering = "pixelated";
+      canvas.style.maxWidth = "100%";
+      canvas.style.height = "auto";
       element.innerHTML = "";
       element.appendChild(canvas);
 
@@ -149,6 +154,8 @@ export function useOfficePixiRuntime({
 
       texturesRef.current = textures;
       buildScene();
+      app.render();
+      element.dataset.officeReady = "true";
       initDoneRef.current = true;
       followCeoInView();
 
@@ -188,11 +195,15 @@ export function useOfficePixiRuntime({
     window.addEventListener("keydown", onKeyDown);
     window.addEventListener("keyup", onKeyUp);
 
-    init();
+    void init().catch((error: unknown) => {
+      if (initIdRef.current !== currentInitId) return;
+      element.dataset.officeReady = "error";
+      console.error("[Mesa] Office renderer initialization failed", error);
+    });
 
     const resizeObserver = new ResizeObserver((entries) => {
       const entry = entries[0];
-      if (!entry || !appRef.current || destroyedRef.current || initIdRef.current !== currentInitId) return;
+      if (!entry || !appRef.current || !initDoneRef.current || destroyedRef.current || initIdRef.current !== currentInitId) return;
       const newWidth = Math.max(MIN_OFFICE_W, Math.floor(entry.contentRect.width));
       if (Math.abs(newWidth - officeWRef.current) > 10) {
         officeWRef.current = newWidth;
@@ -210,6 +221,7 @@ export function useOfficePixiRuntime({
       window.removeEventListener("keyup", onKeyUp);
       deliveriesRef.current = [];
       initDoneRef.current = false;
+      delete element.dataset.officeReady;
       scrollHostXRef.current = null;
       scrollHostYRef.current = null;
 
