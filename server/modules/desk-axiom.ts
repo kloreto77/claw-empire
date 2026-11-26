@@ -6,6 +6,7 @@ import { randomUUID } from "node:crypto";
 import WebSocket from "ws";
 import {MinuteFeatures} from "./axiom-features.ts";
 import {AxiomLedger} from "./axiom-ledger.ts";
+import {createAxiomPaperExecution} from "./axiom-paper.ts";
 import {createAxiomWorker} from "./axiom-worker.ts";
 
 export const AXIOM_ID = "axiom-01";
@@ -50,7 +51,7 @@ export function features(b:Book,now:number){
   const entropy=(a:number[])=>{const sum=a.reduce((x,y)=>x+y,0);return sum?-a.reduce((x,y)=>y>0?x+(y/sum)*Math.log(y/sum):x,0)/Math.log(a.length):null;};
   return {seq:b.seq,event:b.event,received:b.received,bid,ask,mid,spread_bps:(ask-bid)/mid*10000,bids,asks,imbalance:(bids.reduce((a,v)=>a+v,0)-asks.reduce((a,v)=>a+v,0))/mass,entropy_bid:entropy(bids),entropy_ask:entropy(asks),flow:b.flow};
 }
-type Info={symbol:string;status:string;baseAsset:string;quoteAsset:string;isSpotTradingAllowed:boolean};
+type Info={filters?:({filterType:string;[key:string]:unknown})[];symbol:string;status:string;baseAsset:string;quoteAsset:string;isSpotTradingAllowed:boolean};
 type Ticker={symbol:string;quoteVolume:string};
 export function universe(info:Info[],tickers:Ticker[]){
  const stable=new Set(["USDT","USDC","FDUSD","TUSD","DAI","USDP","USD1","USDS","BUSD","PYUSD","EUR","BRL","GBP","TRY","EURI","AEUR","XUSD","USDE"]);
@@ -62,27 +63,30 @@ export function universe(info:Info[],tickers:Ticker[]){
 export function installAxiom(app:Express,db:DatabaseSync,logsDir:string){
   const root=join(logsDir,"axiom-01");mkdirSync(root,{recursive:true});
   db.exec("CREATE TABLE IF NOT EXISTS axiom_events(id TEXT PRIMARY KEY,ts INTEGER NOT NULL,kind TEXT NOT NULL,detail TEXT NOT NULL); CREATE INDEX IF NOT EXISTS axiom_event_ts ON axiom_events(ts);");
-  const minuteFeatures=new MinuteFeatures(),ledger=new AxiomLedger(db),worker=createAxiomWorker(root,join(root,"science"));
-  const scanTimer=setInterval(()=>{if(desired&&worker.status().available)worker.scan();},30*60*1000);scanTimer.unref();
+  const minuteFeatures=new MinuteFeatures(),ledger=new AxiomLedger(db),worker=createAxiomWorker(root,join(root,"science"),()=>{disk=diskUsage();});
+  const paper=createAxiomPaperExecution(ledger);
+  const scanTimer=setInterval(()=>{if((desired||stage==="BLOCKED")&&worker.status().available)worker.tick();},5*60*1000);scanTimer.unref();
   let minutes=0,liquidityMinutes=0;
   let desired=false,stage="STOPPED",error="",symbols:string[]=[],lastSample=0,valid=0,samples=0,fx:{symbol:string;bid:number;ask:number;ts:number}|null=null;
   let ws:WebSocket|null=null,retry:ReturnType<typeof setTimeout>|null=null,sampler:ReturnType<typeof setInterval>|null=null,abort:AbortController|null=null,epoch=0,backoff=10000,runId="";
-  let disk=readdirSync(root).filter(f=>f.endsWith(".ndjson")).reduce((n,f)=>n+statSync(join(root,f)).size,0);
+  function diskUsage(){return readdirSync(root).filter(f=>/\.ndjson(?:\.gz)?$/.test(f)).reduce((n,f)=>n+(statSync(join(root,f),{throwIfNoEntry:false})?.size??0),0);}
+  let disk=diskUsage();
   let queue:string[]=[],queueBytes=0; const books=new Map<string,Book>(),buffers=new Map<string,Diff[]>();
   const event=(kind:string,detail:string)=>db.prepare("INSERT INTO axiom_events VALUES(?,?,?,?)").run(randomUUID(),Date.now(),kind,detail.slice(0,2000));
   function record(kind:string,data:unknown,ts=Date.now()){
     const line=JSON.stringify({schema_version:1,operator_id:AXIOM_ID,run_id:runId,strategy_version:"1.0.0-draft",ts_receive_utc:ts,kind,data})+"\n";
-    const size=Buffer.byteLength(line);if(disk+queueBytes+size>CAP||queueBytes+size>16*1024*1024)throw Error("limite de armazenamento; preservar histórico e interromper coleta");
+    const size=Buffer.byteLength(line);if(disk+queueBytes+size>CAP)disk=diskUsage();
+    if(disk+queueBytes+size>CAP||queueBytes+size>16*1024*1024)throw Error("limite de armazenamento; preservar histórico e interromper coleta");
     queue.push(line);queueBytes+=size;
   }
   function flush(){
     if(!queue.length)return;
-    // File per receive day; no automatic deletion or replacement of evidence.
-    appendFileSync(join(root,new Date().toISOString().slice(0,10)+".ndjson"),queue.join(""),"utf8");
+    // UTC-hour segments keep active writes separate from verified archive maintenance.
+    appendFileSync(join(root,new Date().toISOString().slice(0,13)+".ndjson"),queue.join(""),"utf8");
     disk+=queueBytes;queue=[];queueBytes=0;
   }
   function clear(){epoch++;abort?.abort();abort=null;if(retry)clearTimeout(retry);retry=null;if(sampler)clearInterval(sampler);sampler=null;if(ws){ws.removeAllListeners();ws.on("error",()=>{});ws.terminate();ws=null;}books.clear();buffers.clear();minuteFeatures.reset();valid=0;fx=null;}
-  function stop(reason:string){desired=false;clear();try{flush();}catch(e){error=String(e);}stage="STOPPED";event("STOP",reason);}
+  function stop(reason:string){paper.pause();desired=false;clear();try{flush();}catch(e){error=String(e);}stage="STOPPED";event("STOP",reason);}
   function fault(e:unknown,delay?:number){
     error=e instanceof Error?e.message:String(e);clear();
     try{flush();event("MARKET_GAP",error);}catch{desired=false;}
@@ -105,7 +109,20 @@ export function installAxiom(app:Express,db:DatabaseSync,logsDir:string){
       symbols=universe(info.symbols,tickers);
       if(symbols.length<12)throw Error("menos de 12 pares elegíveis");
       const fxSymbol=info.symbols.find(s=>s.symbol==="USDTBRL"&&s.status==="TRADING"&&s.isSpotTradingAllowed===true&&s.baseAsset==="USDT"&&s.quoteAsset==="BRL")?.symbol;
-      record("UNIVERSE",{symbols,selection:"provisória por volume; filtro de spread/profundidade e histórico ainda pendentes",fxSymbol:fxSymbol??null});
+      const exchangeRules=Object.fromEntries(info.symbols.filter(row=>symbols.includes(row.symbol)).flatMap(row=>{
+        const lot=row.filters?.find(f=>f.filterType==="LOT_SIZE");
+        const market=row.filters?.find(f=>f.filterType==="MARKET_LOT_SIZE");
+        const notional=row.filters?.find(f=>f.filterType==="NOTIONAL"||f.filterType==="MIN_NOTIONAL");
+        if(!lot||!notional)return [];
+        const compatible=typeof market?.stepSize==="string"&&Number(market.stepSize)>0;
+        if(compatible&&Number(market.stepSize)!==Number(lot.stepSize))return [];
+        const minimum=Number(market?.minQty)>Number(lot.minQty)?market?.minQty:lot.minQty;
+        const maximum=Number(market?.maxQty)>0&&Number(market?.maxQty)<Number(lot.maxQty)?market?.maxQty:lot.maxQty;
+        const values=[lot.stepSize,minimum,notional.minNotional,maximum];
+        if(!values.every(value=>typeof value==="string"&&/^\d+(?:\.\d+)?$/.test(value)&&Number(value)>0))return [];
+        return [[row.symbol,{qty_step:lot.stepSize,min_qty:minimum,min_notional:notional.minNotional,max_qty:maximum}]];
+      }));
+      record("UNIVERSE",{symbols,exchangeRules,selection:"provisória por volume; filtro de spread/profundidade e histórico ainda pendentes",fxSymbol:fxSymbol??null});
       const channels=symbols.flatMap(s=>[s.toLowerCase()+"@depth@100ms",s.toLowerCase()+"@aggTrade"]);
       if(fxSymbol)channels.push(fxSymbol.toLowerCase()+"@bookTicker");
       for(const s of symbols)buffers.set(s,[]);
@@ -172,7 +189,7 @@ export function installAxiom(app:Express,db:DatabaseSync,logsDir:string){
       },1000);sampler.unref();
     }catch(e){if(gen===epoch)fault(e,(e as {wait?:number})?.wait);}
   }
-  const status=()=>({installed:Boolean(db.prepare("SELECT 1 FROM agents WHERE id=?").get(AXIOM_ID)),stage,desired,error,symbols,valid,samples,lastSample,minutes,liquidityMinutes,worker:worker.status(),ledger:db.prepare("SELECT 1 FROM agents WHERE id=?").get(AXIOM_ID)?ledger.status(Date.now()):null,fx:fx&&Date.now()-fx.ts<=60000?fx:null,disk_bytes:disk+queueBytes,disk_limit:CAP,paper_enabled:false,blockers:["Histórico L2 e filtros de universo não validados","Motores completos e calibração pendentes","Ledger fracionário implementado; simulador IOC e FX de execução pendentes","Supervisor Qwen e laboratório pendentes"],events:db.prepare("SELECT id,ts,kind,detail FROM axiom_events ORDER BY ts DESC LIMIT 30").all()});
+  const status=()=>({installed:Boolean(db.prepare("SELECT 1 FROM agents WHERE id=?").get(AXIOM_ID)),stage,desired,error,symbols,valid,samples,lastSample,minutes,liquidityMinutes,worker:worker.status(),ledger:db.prepare("SELECT 1 FROM agents WHERE id=?").get(AXIOM_ID)?paper.status():null,fx:fx&&Date.now()-fx.ts<=60000?fx:null,disk_bytes:disk+queueBytes,disk_limit:CAP,paper_enabled:false,blockers:["Histórico L2 e filtros de universo não validados","Motores completos e calibração pendentes","Validação prospectiva, replay com custos e aprovação humana exigidos"],events:db.prepare("SELECT id,ts,kind,detail FROM axiom_events ORDER BY ts DESC LIMIT 30").all()});
   app.get("/api/desk/axiom/status",(_req,res)=>res.json(status()));
   app.post("/api/desk/axiom/scan",(_req,res)=>{if(!db.prepare("SELECT 1 FROM agents WHERE id=?").get(AXIOM_ID))return res.status(409).json({error:"Cadastre AXIOM primeiro."});worker.scan();return res.json(status());});
   app.post("/api/desk/axiom/start",(_req,res)=>{
@@ -183,10 +200,10 @@ export function installAxiom(app:Express,db:DatabaseSync,logsDir:string){
       db.prepare("INSERT INTO agents(id,name,name_ko,name_ja,name_zh,department_id,workflow_pack_key,role,personality) VALUES(?,?,?,?,?,?,?,?,?)").run(AXIOM_ID,"AXIOM","AXIOM","AXIOM","AXIOM",department,"development","junior","AXIOM V1: operador quantitativo em COLLECT_ONLY. Dados reais, execução exclusivamente simulada; IA não autoriza ordens. Método completo exige treinamento, calibração, ledger e aprovação humana.");
       event("REGISTERED","Operador registrado sem modelo ou autorização de ordens.");
     }
-    if(!desired){desired=true;event("START","Coleta pública solicitada; nenhuma ordem autorizada.");void connect();if(worker.status().available)worker.scan();}
+    if(!desired){desired=true;event("START","Coleta pública solicitada; nenhuma ordem autorizada.");void connect();if(worker.status().available)worker.tick();}
     return res.json(status());
   });
   app.post("/api/desk/axiom/stop",(_req,res)=>{stop("Coleta interrompida pelo operador.");return res.json(status());});
-  const close=()=>{desired=false;clearInterval(scanTimer);worker.stop();clear();try{flush();}catch(e){console.error("[AXIOM] flush",e);}};
+  const close=()=>{paper.pause();desired=false;clearInterval(scanTimer);worker.stop();clear();try{flush();}catch(e){console.error("[AXIOM] flush",e);}};
   process.once("SIGTERM",close);process.once("SIGINT",close);
 }

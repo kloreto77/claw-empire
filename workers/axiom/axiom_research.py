@@ -142,16 +142,19 @@ def split(frame,start):
         sets.append(d)
     return sets
 
-def fit_horizon(frame,h,start,out):
+def fit_horizon(frame,h,start,out,*,features=FEATURES,by_day=False,threads=2):
     from catboost import CatBoostRegressor
     train,cal,val=split(labeled(frame,h),start)
-    x=train[list(FEATURES)]; y=train.y
-    params=dict(iterations=300,depth=5,learning_rate=.05,random_seed=42,thread_count=2,
+    columns=list(features)
+    if not columns or len(set(columns))!=len(columns) or not set(columns)<=set(FEATURES):
+        raise ValueError("invalid feature set")
+    x=train[columns]; y=train.y
+    params=dict(iterations=300,depth=5,learning_rate=.05,random_seed=42,thread_count=threads,
                 verbose=False,allow_writing_files=False,task_type="CPU")
     mean_model=CatBoostRegressor(loss_function="RMSE",**params).fit(x,y)
     q_model=CatBoostRegressor(loss_function="MultiQuantile:alpha="+",".join(map(str,QUANTILES)),**params).fit(x,y)
     def predict(d):
-        z=d[list(FEATURES)]; raw=np.asarray(q_model.predict(z)); ordered=np.sort(raw,axis=1)
+        z=d[columns]; raw=np.asarray(q_model.predict(z)); ordered=np.sort(raw,axis=1)
         return np.asarray(mean_model.predict(z)),ordered,float(np.mean(np.any(np.diff(raw,axis=1)<0,axis=1)))
     cm,cq,cross=predict(cal)
     scores=np.maximum.reduce([cq[:,0]-cal.y.to_numpy(),cal.y.to_numpy()-cq[:,-1],np.zeros(len(cal))])
@@ -161,7 +164,7 @@ def fit_horizon(frame,h,start,out):
     vm,vq,vcross=predict(val); actual=val.y.to_numpy()
     low=vq[:,0]-expansion;high=vq[:,-1]+expansion
     ridge=make_pipeline(StandardScaler(),Ridge(alpha=1.)).fit(x,y)
-    rv=ridge.predict(val[list(FEATURES)])
+    rv=ridge.predict(val[columns])
     # Diagnostics only: no candidate selection, cost model, CVaR or trading gate.
     metrics={"horizon":h,"train_rows":len(train),"cal_rows":len(cal),"validation_rows":len(val),
        "validation_mae":float(np.mean(np.abs(vm-actual))),"zero_mae":float(np.mean(np.abs(actual))),
@@ -169,9 +172,17 @@ def fit_horizon(frame,h,start,out):
        "coverage":float(np.mean((actual>=low)&(actual<=high))),"mean_width":float(np.mean(high-low)),
        "pinball":[float(np.mean(np.maximum(q*(actual-vq[:,i]),(q-1)*(actual-vq[:,i])))) for i,q in enumerate(QUANTILES)],
        "cqr_expansion":expansion,"paper_authorized":False}
+    if by_day:
+        absolute = np.abs(vm - actual)
+        days = val.end.to_numpy(dtype=np.int64) // DAY
+        metrics["daily_validation"] = [
+            {"utc_day": int(day), "rows": int(np.count_nonzero(days == day)),
+             "mae": float(absolute[days == day].mean())}
+            for day in np.unique(days)
+        ]
     out=Path(out);out.mkdir(parents=True,exist_ok=False)
     mean_model.save_model(str(out/"mean.cbm"));q_model.save_model(str(out/"quantiles.cbm"))
-    manifest={"status":"RESEARCH_ONLY","horizon":h,"start_utc_ms":int(start),"features":FEATURES,"seed":42,
+    manifest={"status":"RESEARCH_ONLY","horizon":h,"start_utc_ms":int(start),"features":tuple(columns),"seed":42,
               "model_files":{p.name:hashlib.sha256(p.read_bytes()).hexdigest() for p in out.glob("*.cbm")},
               "metrics":metrics,"paper_authorized":False}
     (out/"manifest.json").write_text(json.dumps(manifest,indent=2,allow_nan=False),encoding="utf-8")

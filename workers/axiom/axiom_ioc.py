@@ -135,3 +135,22 @@ class Matcher:
         if not buy and fee>gross: return finish("CANCELLED","NEGATIVE_PROCEEDS")
         self.last[book.symbol]=(book.seq,fingerprint,consumed)
         return finish("FILLED" if remaining==0 else "PARTIAL_CANCELLED","IOC",qty,quote/qty,gross,fee)
+
+
+def match_payload(payload):
+    """Run the default paper IOC scenario from the Mesa's internal subprocess."""
+    intent, book, fx, rules = (payload[k] for k in ("intent", "book", "fx", "rules"))
+    order = Intent(intent["id"], intent["symbol"], intent["side"],
+                   dec(intent["quantity"]), intent["decision_ms"], intent["expiry_ms"],
+                   dec(intent["reservation_brl"]), dec(intent["held_quantity"]))
+    snapshot = Book(book["symbol"], book["seq"], book["event_ms"], book["receive_ms"],
+                    tuple(book["bids"]), tuple(book["asks"]))
+    quote = FX(dec(fx["bid"]), dec(fx["ask"]), fx["receive_ms"], fx["snapshot_id"])
+    limits = Rules(dec(rules["qty_step"]), dec(rules["min_qty"]),
+                   dec(rules["min_notional"]), dec(rules["max_qty"]))
+    result = Matcher().execute(order, snapshot, quote, limits, payload["now_ms"])
+    return {"id": result.id, "status": result.status, "reason": result.reason,
+            "qty": format(result.qty, "f"), "gross_brl": format(result.gross_brl, "f"),
+            "fee_brl": format(result.fee_brl, "f"),
+            "average_price": None if result.average_price is None else format(result.average_price, "f"),
+            "sequence": result.sequence, "fx_snapshot_id": result.fx_snapshot_id}

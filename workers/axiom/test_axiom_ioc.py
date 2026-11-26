@@ -37,3 +37,31 @@ def test_reservation_and_conservative_fx():
     assert x.status=="PARTIAL_CANCELLED" and D(0)<x.qty<1 and x.net_brl<=500
     y=m.execute(replace(i,id="s",side="sell",quantity=D("1"),held_quantity=D("1")),b,f,r,1500)
     assert y.status=="FILLED" and y.gross_brl==D("495.00") and y.net_brl==D("494.50")
+
+
+def test_dedicated_worker_ioc_command_preserves_decimal_amounts(tmp_path):
+    import json
+    from pathlib import Path
+    import subprocess
+    import sys
+
+    request = {
+        "intent": {"id": "order1", "symbol": "BTCUSDT", "side": "buy", "quantity": "0.002",
+                   "decision_ms": 0, "expiry_ms": 5000, "reservation_brl": "200.00", "held_quantity": "0"},
+        "book": {"symbol": "BTCUSDT", "seq": 50, "event_ms": 500, "receive_ms": 500,
+                 "bids": [["9999", "1"]], "asks": [["10000", "1"]]},
+        "fx": {"bid": "5.10", "ask": "5.11", "receive_ms": 500, "snapshot_id": "safe"},
+        "rules": {"qty_step": "0.001", "min_qty": "0.001", "min_notional": "5.00", "max_qty": "10.000"},
+        "now_ms": 500,
+    }
+    state = tmp_path / "science"
+    result = subprocess.run(
+        [sys.executable, str(Path(__file__).with_name("axiom_runtime.py")),
+         "--data", str(tmp_path), "--state", str(state), "ioc"],
+        input=json.dumps(request), text=True, capture_output=True, check=True,
+    )
+    assert json.loads(result.stdout) == {
+        "average_price": "10000", "fee_brl": "0.11", "fx_snapshot_id": "safe", "gross_brl": "102.20",
+        "id": "order1", "qty": "0.002", "reason": "IOC", "sequence": 50, "status": "FILLED",
+    }
+    assert not state.exists()

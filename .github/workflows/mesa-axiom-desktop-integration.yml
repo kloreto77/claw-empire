@@ -1,11 +1,16 @@
-name: Mesa AXIOM - desktop integrado 3.1.2
+name: Mesa AXIOM - atualização Windows
 on:
   push:
-    branches: [mesa-axiom-integration]
+    branches: [mesa-axiom-operational]
   workflow_dispatch:
+    inputs:
+      publish_release:
+        description: Publicar atualização validada
+        type: boolean
+        default: false
 concurrency:
-  group: mesa-axiom-collect-${{ github.ref }}
-  cancel-in-progress: true
+  group: mesa-axiom-windows-${{ github.ref }}
+  cancel-in-progress: false
 permissions:
   contents: read
 jobs:
@@ -105,18 +110,13 @@ jobs:
           Copy-Item workers/axiom/dist/axiom-worker .desktop-runtime/axiom-worker -Recurse
           $tmp = Join-Path $env:RUNNER_TEMP 'axiom-empty'
           New-Item -ItemType Directory -Path $tmp -Force | Out-Null
-          & .desktop-runtime/axiom-worker/axiom-worker.exe --data $tmp --state "$tmp/science" scan
+          & .desktop-runtime/axiom-worker/axiom-worker.exe --data $tmp --state "$tmp/science" tick
           if ($LASTEXITCODE -ne 0) { throw 'Frozen worker failed' }
       - name: Install desktop build tools
         working-directory: desktop
         run: npm install --no-audit --no-fund
       - name: Format desktop sources
         run: pnpm exec prettier --check desktop/main.cjs desktop/backend.mjs desktop/after-pack.cjs desktop/package.json .github/workflows/mesa-windows.yml
-      - name: Show exact desktop formatting differences
-        if: failure()
-        run: |
-          pnpm exec prettier --write desktop/main.cjs
-          git diff -- desktop/main.cjs
       - name: Package Windows installer
         working-directory: desktop
         run: npx --no-install electron-builder --win nsis --x64 --publish never
@@ -142,7 +142,7 @@ jobs:
           $worker = Join-Path $PWD 'desktop-release/win-unpacked/resources/mesa-runtime/axiom-worker/axiom-worker.exe'
           $tmp = Join-Path $env:RUNNER_TEMP 'axiom-packaged-empty'
           New-Item -ItemType Directory -Path $tmp -Force | Out-Null
-          & $worker --data $tmp --state "$tmp/science" scan
+          & $worker --data $tmp --state "$tmp/science" tick
           if ($LASTEXITCODE -ne 0) { throw 'Packaged worker failed' }
       - name: Launch packaged desktop smoke test
         shell: pwsh
@@ -178,7 +178,7 @@ jobs:
           $pkg = 'desktop/package.json'
           $original = Get-Content $pkg -Raw
           try {
-            node -e "const fs=require('fs'); const p='desktop/package.json'; const v=JSON.parse(fs.readFileSync(p)); v.version='2.0.0'; fs.writeFileSync(p,JSON.stringify(v,null,2))"
+            node -e "const fs=require('fs'); const p='desktop/package.json'; const v=JSON.parse(fs.readFileSync(p)); v.version='3.1.2'; fs.writeFileSync(p,JSON.stringify(v,null,2))"
             if ($LASTEXITCODE -ne 0) { throw 'Cannot prepare update fixture' }
             Push-Location desktop
             try {
@@ -190,6 +190,8 @@ jobs:
           }
       - name: Test installer and real version upgrade
         shell: pwsh
+        env:
+          MESA_FIXTURE_BASELINE: "3.1.2"
         run: ./desktop/test-update.ps1
       - name: Record packaged application fingerprint
         shell: pwsh
@@ -214,4 +216,56 @@ jobs:
           path: |
             desktop-diagnostics/**/*.log
             desktop/package-lock.json
+          if-no-files-found: ignore
+  publish:
+    if: github.ref == 'refs/heads/mesa-axiom-operational' && (github.event_name == 'push' || inputs.publish_release)
+    needs: [validate, package]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: Mesa-AXIOM-Integrated-Windows-x64
+          path: desktop-release
+      - name: Publish validated release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          version="$(node -p "require('./desktop/package.json').version")"
+          test -s desktop-release/latest.yml
+          if gh release view "v$version" >/dev/null 2>&1; then
+            echo "Version already released; increment desktop/package.json for another update." >&2
+            exit 1
+          fi
+          gh release create "v$version" desktop-release/Mesa-V2-Setup-*.exe desktop-release/Mesa-V2-Setup-*.exe.blockmap desktop-release/latest.yml --target "$GITHUB_SHA" --title "Mesa de Operações $version" --notes "Windows x64. Integração científica do AXIOM em coleta e pesquisa. Carteira oficial bloqueada pelos critérios científicos."
+  verify-public-update:
+    needs: publish
+    if: github.ref == 'refs/heads/mesa-axiom-operational' && needs.publish.result == 'success'
+    runs-on: windows-2025
+    timeout-minutes: 40
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: actions/download-artifact@v4
+        with:
+          name: Mesa-AXIOM-Integrated-Windows-x64
+          path: desktop-release
+      - name: Test public GitHub update with installed production app
+        shell: pwsh
+        env:
+          MESA_PUBLIC_BASELINE: "3.1.2"
+        run: ./desktop/test-public-update.ps1
+      - name: Upload public update diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Mesa-V2-public-update-diagnostics
+          path: desktop-public-diagnostics/
           if-no-files-found: ignore

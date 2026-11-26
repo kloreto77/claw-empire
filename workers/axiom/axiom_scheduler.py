@@ -8,8 +8,9 @@ def slots(ts):
     date=t.date().isoformat()
     minute=t.hour*60+t.minute
     out=[]
-    if minute>=10:out.append(("daily:"+date,"daily"))
-    if t.weekday()==0 and minute>=30:out.append(("weekly:"+date,"weekly"))
+    if 10<=minute<15:out.append(("daily:"+date,"daily"))
+    if t.weekday()==0 and 30<=minute<35:out.append(("weekly:"+date,"weekly"))
+    if t.day==1 and 50<=minute<55:out.append(("monthly:"+date,"monthly"))
     return out
 
 class Scheduler:

@@ -1,10 +1,12 @@
 $ErrorActionPreference = 'Stop'
 $root = Join-Path $PWD 'desktop-public-diagnostics'
 New-Item -ItemType Directory -Path $root -Force | Out-Null
+$baseline = if ($env:MESA_PUBLIC_BASELINE) { $env:MESA_PUBLIC_BASELINE } else { '2.0.8' }
+$baselinePattern = [regex]::Escape($baseline)
 $version = node -p "require('./desktop/package.json').version"
-if ([version]$version -le [version]'2.0.8') { throw 'Expected a newer version than 2.0.8' }
+if ([version]$version -le [version]$baseline) { throw "Expected a newer version than $baseline" }
 $repo = 'https://github.com/kloreto77/claw-empire'
-$old = Join-Path $root 'Mesa-V2-Setup-2.0.8-x64.exe'
+$old = Join-Path $root "Mesa-V2-Setup-$baseline-x64.exe"
 $install = Join-Path $env:LOCALAPPDATA 'MesaV2-Public-CI'
 $exe = Join-Path $install 'MesaOperacoesV2.exe'
 $asar = Join-Path $install 'resources/app.asar'
@@ -40,9 +42,9 @@ function Close-Mesa($process) {
 
 try {
   # Public HTTPS endpoints only. No token or feed override is supplied to the app.
-  curl.exe --fail --location --retry 4 "$repo/releases/download/v2.0.8/Mesa-V2-Setup-2.0.8-x64.exe" --output $old
+  curl.exe --fail --location --retry 4 "$repo/releases/download/v$baseline/Mesa-V2-Setup-$baseline-x64.exe" --output $old
   if ($LASTEXITCODE -ne 0) { throw 'Public baseline installer download failed' }
-  curl.exe --fail --location --retry 4 "$repo/releases/download/v2.0.8/latest.yml" --output (Join-Path $root 'baseline.yml')
+  curl.exe --fail --location --retry 4 "$repo/releases/download/v$baseline/latest.yml" --output (Join-Path $root 'baseline.yml')
   if ($LASTEXITCODE -ne 0) { throw 'Public baseline metadata download failed' }
   $oldMeta = Get-Content (Join-Path $root 'baseline.yml') -Raw
   $expectedOld = [regex]::Match($oldMeta,'(?m)^sha512:\s*(\S+)\s*$').Groups[1].Value
@@ -70,7 +72,7 @@ try {
     foreach ($dir in (Get-ChildItem $env:APPDATA -Directory)) {
       $candidate = Join-Path $dir.FullName 'runtime'
       $log = Join-Path $candidate 'logs/desktop-main.log'
-      if ((Read-Log $log) -match 'Desktop main started: 2\.0\.8') { $runtime = $candidate; break }
+      if ((Read-Log $log) -match "Desktop main started: $baselinePattern") { $runtime = $candidate; break }
     }
     if (!$runtime) { Start-Sleep -Seconds 1 }
   }
@@ -109,7 +111,7 @@ try {
   $backup = Get-ChildItem (Join-Path $runtime 'update-backups') -Directory | Select-Object -First 1
   if (!$backup -or !(Test-Path (Join-Path $backup.FullName 'mesa.sqlite'))) { throw 'Pre-update database backup missing' }
   if ((Get-FileHash (Join-Path $backup.FullName 'encryption-key.txt') -Algorithm SHA256).Hash -ne $keyHash) { throw 'Backup key mismatch' }
-  Write-Host "PUBLIC GITHUB UPDATE PASSED: 2.0.8 -> $version; normal window, exact application fingerprint, database, encryption key and backup verified."
+  Write-Host "PUBLIC GITHUB UPDATE PASSED: $baseline -> $version; normal window, exact application fingerprint, database, encryption key and backup verified."
 } finally {
   if ($p -and !$p.HasExited) { Stop-Process -Id $p.Id -Force }
   if ($runtime -and (Test-Path (Join-Path $runtime 'logs'))) {
