@@ -1,3 +1,4 @@
+import { buildDeskAgentSkills } from "../../desk-agent-skills.ts";
 import fs from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
@@ -277,6 +278,7 @@ export function createDirectReplyRuntime(deps: DirectReplyRuntimeDeps) {
           const projectPath = detectedPath || (activeTask ? deps.resolveProjectPath(activeTask) : process.cwd());
 
           const built = deps.buildDirectReplyPrompt(agent, ceoMessage, messageType);
+          built.prompt += '\n'+buildDeskAgentSkills(deps.db,agent.id)+'\nResponda em português brasileiro, salvo solicitação explícita em outro idioma.';
 
           console.log(
             `[scheduleAgentReply] agent=${agent.name}, cli_provider=${agent.cli_provider}, api_provider_id=${agent.api_provider_id}, api_model=${agent.api_model}`,

@@ -1,3 +1,4 @@
+import { buildDeskAgentSkills } from "../../../desk-agent-skills.ts";
 import path from "node:path";
 import { notifyTaskStatus } from "../../../../gateway/client.ts";
 import type { RuntimeContext } from "../../../../types/runtime-context.ts";
@@ -485,6 +486,8 @@ Whenever you complete a subtask, report it in this format:
         `\n---`,
         `Agent: ${agent.name} (${roleLabel}, ${agent.department_name || "Unassigned"})`,
         agent.personality ? `Personality: ${agent.personality}` : "",
+        buildDeskAgentSkills(db, agentId),
+        "Responda em português brasileiro, salvo solicitação explícita em outro idioma.",
         deptConstraint,
         departmentPromptBlock,
         `NOTE: You are working in an isolated Git worktree branch (climpire/${id.slice(0, 8)}). Commit your changes normally.`,

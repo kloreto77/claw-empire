@@ -79,6 +79,7 @@ export function installDeskMarket(app: Express, db: DatabaseSync) {
       if(existing.agent_id!==id||existing.symbol!==symbol||existing.side!==side||existing.quantity!==quantity) return res.status(409).json({error:"Identificador de ordem já utilizado"});
       return res.json({simulated:true,trade:existing,replayed:true});
     }
+    if(body.task_id!==undefined && (typeof body.task_id!=="string" || !db.prepare("SELECT 1 FROM tasks WHERE id=? AND assigned_agent_id=? AND status='in_progress'").get(body.task_id,id))) return res.status(403).json({error:"Tarefa não está ativa para este agente"});
     const a=ensure(id);
     if(!a.enabled) return res.status(403).json({error:"Operações simuladas desativadas para este agente"});
     const tick=tickNow(), q=quote(symbol,tick);

@@ -385,7 +385,7 @@ export default function App() {
 
   if (loading) {
     return (
-      <AppLoadingScreen language={labels.uiLanguage} title={labels.loadingTitle} subtitle={labels.loadingSubtitle} />
+      <AppLoadingScreen language={labels.uiLanguage} title="Abrindo a Mesa de Operações…" subtitle="Carregando agentes e configurações locais" />
     );
   }
 

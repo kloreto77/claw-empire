@@ -1,3 +1,4 @@
+import { runDeskMarketAgent } from "../../../desk-market-agent.ts";
 import fs from "node:fs";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
@@ -227,6 +228,9 @@ export function createApiProviderTools(deps: CreateApiProviderToolsDeps) {
             | undefined)
         : undefined;
     const usage: Record<string, number> = {};
+    const marketOwner = taskId && provider.type !== 'anthropic' && provider.type !== 'google' && db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='desk_market_accounts'").get()
+      ? (db.prepare("SELECT t.assigned_agent_id FROM tasks t JOIN desk_market_accounts a ON a.agent_id=t.assigned_agent_id WHERE t.id=? AND t.status='in_progress' AND a.enabled=1").get(taskId) as {assigned_agent_id:string}|undefined)
+      : undefined;
     const consumeLine = (line: string) => {
       if (!line.startsWith("data:")) return;
       try {
@@ -243,6 +247,10 @@ export function createApiProviderTools(deps: CreateApiProviderToolsDeps) {
       }
     };
     try {
+      if(marketOwner?.assigned_agent_id && taskId){
+        const agentId=marketOwner.assigned_agent_id;
+        await runDeskMarketAgent({request:req,agentId,taskId,signal,usage,stillAllowed:()=>Boolean(db.prepare("SELECT 1 FROM tasks t JOIN desk_market_accounts a ON a.agent_id=t.assigned_agent_id WHERE t.id=? AND t.assigned_agent_id=? AND t.status='in_progress' AND a.enabled=1").get(taskId,agentId)),write:text=>{safeWrite(text);broadcast('cli_output',{task_id:taskId,stream:'stdout',data:text});}});
+      } else {
       const resp = await fetch(req.url, {
         method: "POST",
         headers: req.headers,
@@ -281,6 +289,7 @@ export function createApiProviderTools(deps: CreateApiProviderToolsDeps) {
           );
         }
         await parseSSEStream(body, signal, safeWrite, taskId);
+      }
       }
     } finally {
       if (owner?.assigned_agent_id && taskId) {
