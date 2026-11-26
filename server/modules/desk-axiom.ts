@@ -6,6 +6,7 @@ import { randomUUID } from "node:crypto";
 import WebSocket from "ws";
 import {MinuteFeatures} from "./axiom-features.ts";
 import {AxiomLedger} from "./axiom-ledger.ts";
+import {createAxiomWorker} from "./axiom-worker.ts";
 
 export const AXIOM_ID = "axiom-01";
 const REST="https://data-api.binance.vision/api/v3";
@@ -61,7 +62,8 @@ export function universe(info:Info[],tickers:Ticker[]){
 export function installAxiom(app:Express,db:DatabaseSync,logsDir:string){
   const root=join(logsDir,"axiom-01");mkdirSync(root,{recursive:true});
   db.exec("CREATE TABLE IF NOT EXISTS axiom_events(id TEXT PRIMARY KEY,ts INTEGER NOT NULL,kind TEXT NOT NULL,detail TEXT NOT NULL); CREATE INDEX IF NOT EXISTS axiom_event_ts ON axiom_events(ts);");
-  const minuteFeatures=new MinuteFeatures(),ledger=new AxiomLedger(db);
+  const minuteFeatures=new MinuteFeatures(),ledger=new AxiomLedger(db),worker=createAxiomWorker(root,join(root,"science"));
+  const scanTimer=setInterval(()=>{if(desired&&worker.status().available)worker.scan();},30*60*1000);scanTimer.unref();
   let minutes=0,liquidityMinutes=0;
   let desired=false,stage="STOPPED",error="",symbols:string[]=[],lastSample=0,valid=0,samples=0,fx:{symbol:string;bid:number;ask:number;ts:number}|null=null;
   let ws:WebSocket|null=null,retry:ReturnType<typeof setTimeout>|null=null,sampler:ReturnType<typeof setInterval>|null=null,abort:AbortController|null=null,epoch=0,backoff=10000,runId="";
@@ -170,8 +172,9 @@ export function installAxiom(app:Express,db:DatabaseSync,logsDir:string){
       },1000);sampler.unref();
     }catch(e){if(gen===epoch)fault(e,(e as {wait?:number})?.wait);}
   }
-  const status=()=>({installed:Boolean(db.prepare("SELECT 1 FROM agents WHERE id=?").get(AXIOM_ID)),stage,desired,error,symbols,valid,samples,lastSample,minutes,liquidityMinutes,ledger:db.prepare("SELECT 1 FROM agents WHERE id=?").get(AXIOM_ID)?ledger.status(Date.now()):null,fx:fx&&Date.now()-fx.ts<=60000?fx:null,disk_bytes:disk+queueBytes,disk_limit:CAP,paper_enabled:false,blockers:["Histórico L2 e filtros de universo não validados","Motores completos e calibração pendentes","Ledger fracionário implementado; simulador IOC e FX de execução pendentes","Supervisor Qwen e laboratório pendentes"],events:db.prepare("SELECT id,ts,kind,detail FROM axiom_events ORDER BY ts DESC LIMIT 30").all()});
+  const status=()=>({installed:Boolean(db.prepare("SELECT 1 FROM agents WHERE id=?").get(AXIOM_ID)),stage,desired,error,symbols,valid,samples,lastSample,minutes,liquidityMinutes,worker:worker.status(),ledger:db.prepare("SELECT 1 FROM agents WHERE id=?").get(AXIOM_ID)?ledger.status(Date.now()):null,fx:fx&&Date.now()-fx.ts<=60000?fx:null,disk_bytes:disk+queueBytes,disk_limit:CAP,paper_enabled:false,blockers:["Histórico L2 e filtros de universo não validados","Motores completos e calibração pendentes","Ledger fracionário implementado; simulador IOC e FX de execução pendentes","Supervisor Qwen e laboratório pendentes"],events:db.prepare("SELECT id,ts,kind,detail FROM axiom_events ORDER BY ts DESC LIMIT 30").all()});
   app.get("/api/desk/axiom/status",(_req,res)=>res.json(status()));
+  app.post("/api/desk/axiom/scan",(_req,res)=>{if(!db.prepare("SELECT 1 FROM agents WHERE id=?").get(AXIOM_ID))return res.status(409).json({error:"Cadastre AXIOM primeiro."});worker.scan();return res.json(status());});
   app.post("/api/desk/axiom/start",(_req,res)=>{
     if(!db.prepare("SELECT 1 FROM agents WHERE id=?").get(AXIOM_ID)){
       const duplicate=db.prepare("SELECT id FROM agents WHERE lower(name)='axiom'").get();if(duplicate)return res.status(409).json({error:"Já existe AXIOM com outro ID; não sobrescrevemos agentes."});
@@ -180,10 +183,10 @@ export function installAxiom(app:Express,db:DatabaseSync,logsDir:string){
       db.prepare("INSERT INTO agents(id,name,name_ko,name_ja,name_zh,department_id,workflow_pack_key,role,personality) VALUES(?,?,?,?,?,?,?,?,?)").run(AXIOM_ID,"AXIOM","AXIOM","AXIOM","AXIOM",department,"development","junior","AXIOM V1: operador quantitativo em COLLECT_ONLY. Dados reais, execução exclusivamente simulada; IA não autoriza ordens. Método completo exige treinamento, calibração, ledger e aprovação humana.");
       event("REGISTERED","Operador registrado sem modelo ou autorização de ordens.");
     }
-    if(!desired){desired=true;event("START","Coleta pública solicitada; nenhuma ordem autorizada.");void connect();}
+    if(!desired){desired=true;event("START","Coleta pública solicitada; nenhuma ordem autorizada.");void connect();if(worker.status().available)worker.scan();}
     return res.json(status());
   });
   app.post("/api/desk/axiom/stop",(_req,res)=>{stop("Coleta interrompida pelo operador.");return res.json(status());});
-  const close=()=>{desired=false;clear();try{flush();}catch(e){console.error("[AXIOM] flush",e);}};
+  const close=()=>{desired=false;clearInterval(scanTimer);worker.stop();clear();try{flush();}catch(e){console.error("[AXIOM] flush",e);}};
   process.once("SIGTERM",close);process.once("SIGINT",close);
 }
