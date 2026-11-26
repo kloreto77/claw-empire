@@ -34,7 +34,7 @@ export function installDeskMarket(app: Express, db: DatabaseSync) {
   const custom=new Map<string,MarketAsset>((db.prepare("SELECT * FROM desk_market_custom_assets").all() as unknown as MarketAsset[]).map(a=>[a.symbol,a]));
   const lookup=(symbol:string)=>getAsset(symbol)??custom.get(symbol);
   const allAssets=()=>[...ASSETS,...custom.values()];
-  const price=(symbol:string,tick:number)=>quote(symbol,tick,custom.get(symbol));
+  const marketQuote=(symbol:string,tick:number)=>quote(symbol,tick,custom.get(symbol));
   app.post("/api/desk/market/catalog",(req,res)=>{
     const b=req.body??{},symbol=typeof b.symbol==="string"?b.symbol.trim().toUpperCase():"",name=typeof b.name==="string"?b.name.trim():"";
     const category=typeof b.category==="string"?b.category:"",base=b.base_cents,volatility=b.volatility;
@@ -53,7 +53,7 @@ export function installDeskMarket(app: Express, db: DatabaseSync) {
   const positions = (id:string) => db.prepare("SELECT symbol,quantity,basis FROM desk_market_positions WHERE agent_id=? AND quantity>0").all(id) as unknown as Position[];
   const account = (id:string,tick:number) => {
     const a=ensure(id), holdings=positions(id);
-    const equity=a.cash+holdings.reduce((n,p)=>n+p.quantity*price(p.symbol,tick).bid,0);
+    const equity=a.cash+holdings.reduce((n,p)=>n+p.quantity*marketQuote(p.symbol,tick).bid,0);
     const peak=Math.max(a.peak,equity), drawdown=Math.max(a.drawdown,(peak-equity)/peak*100);
     if(peak!==a.peak || drawdown!==a.drawdown) db.prepare("UPDATE desk_market_accounts SET peak=?,drawdown=? WHERE agent_id=?").run(peak,drawdown,id);
     const stats=db.prepare("SELECT COUNT(*) AS trades, SUM(CASE WHEN side='sell' THEN 1 ELSE 0 END) AS closed, SUM(CASE WHEN side='sell' AND realized>0 THEN 1 ELSE 0 END) AS wins, COALESCE(SUM(realized),0) AS realized FROM desk_market_trades WHERE agent_id=?").get(id) as {trades:number;closed:number|null;wins:number|null;realized:number};
@@ -64,17 +64,17 @@ export function installDeskMarket(app: Express, db: DatabaseSync) {
   const details=(symbol:string,tick:number)=>{
       const candles=Array.from({length:36},(_,i)=>{
         const t=tick-(35-i)*5;
-        const prices=Array.from({length:5},(_,k)=>price(symbol,t-4+k).last);
+        const prices=Array.from({length:5},(_,k)=>marketQuote(symbol,t-4+k).last);
         return {time:t*TICK_MS,open:prices[0],high:Math.max(...prices),low:Math.min(...prices),close:prices[4]};
       });
-      return {...price(symbol,tick),candles,change_pct:(price(symbol,tick).last/price(symbol,tick-30).last-1)*100};
+      return {...marketQuote(symbol,tick),candles,change_pct:(marketQuote(symbol,tick).last/marketQuote(symbol,tick-30).last-1)*100};
   };
   app.get("/api/desk/market/catalog",(_req,res)=>res.json({simulated:true,assets:allAssets().map(({symbol,name,category,region})=>({symbol,name,category,region}))}));
   app.get("/api/desk/market/quotes",(req,res)=>{
     const tick=tickNow(),search=String(req.query.search??"").trim().toUpperCase(),category=String(req.query.category??"");
     const rows=allAssets().filter(a=>(!category||a.category===category)&&(!search||(a.symbol+" "+a.name+" "+a.region).toUpperCase().includes(search)));
     const limit=Math.min(100,Math.max(1,Number(req.query.limit)||30)),offset=Math.max(0,Math.floor(Number(req.query.offset)||0));
-    return res.json({simulated:true,total:rows.length,categories:[...new Set(allAssets().map(a=>a.category))],assets:rows.slice(offset,offset+limit).map(a=>({...price(a.symbol,tick),change_pct:(price(a.symbol,tick).last/price(a.symbol,tick-30).last-1)*100})),updated_at:tick*TICK_MS});
+    return res.json({simulated:true,total:rows.length,categories:[...new Set(allAssets().map(a=>a.category))],assets:rows.slice(offset,offset+limit).map(a=>({...marketQuote(a.symbol,tick),change_pct:(marketQuote(a.symbol,tick).last/marketQuote(a.symbol,tick-30).last-1)*100})),updated_at:tick*TICK_MS});
   });
   app.get("/api/desk/market/quote/:symbol",(req,res)=>{
     const symbol=String(req.params.symbol).toUpperCase();if(!lookup(symbol))return res.status(404).json({error:"Ativo não encontrado"});
@@ -113,7 +113,7 @@ export function installDeskMarket(app: Express, db: DatabaseSync) {
     if(body.task_id!==undefined && (typeof body.task_id!=="string" || !db.prepare("SELECT 1 FROM tasks WHERE id=? AND assigned_agent_id=? AND status='in_progress'").get(body.task_id,id))) return res.status(403).json({error:"Tarefa não está ativa para este agente"});
     const a=ensure(id);
     if(!a.enabled) return res.status(403).json({error:"Operações simuladas desativadas para este agente"});
-    const tick=tickNow(), q=price(symbol,tick);
+    const tick=tickNow(), q=marketQuote(symbol,tick);
     if(quantity>q.liquidity) return res.status(409).json({error:"Quantidade excede a liquidez desta cotação"});
     const price=side==="buy"?q.ask:q.bid, gross=price*quantity, fee=Math.max(1,Math.ceil(gross*.001));
     const pos=positions(id).find(p=>p.symbol===symbol);
