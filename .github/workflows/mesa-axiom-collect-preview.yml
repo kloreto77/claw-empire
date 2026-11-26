@@ -23,7 +23,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
-      - run: pnpm exec tsx --test scripts/mesa-seed.test.ts scripts/mesa-market.test.ts scripts/mesa-v3-agent.test.ts scripts/mesa-schedule-window.test.ts scripts/mesa-v3-connections.test.ts scripts/mesa-axiom-collect.test.ts
+      - run: pnpm exec tsx --test scripts/mesa-seed.test.ts scripts/mesa-market.test.ts scripts/mesa-v3-agent.test.ts scripts/mesa-schedule-window.test.ts scripts/mesa-v3-connections.test.ts scripts/mesa-axiom-collect.test.ts scripts/axiom-ledger.test.ts
       - run: pnpm exec playwright install --with-deps chromium
       - name: Smoke test visual com backend real
         shell: bash
@@ -66,7 +66,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile --config.node-linker=hoisted
       - run: pnpm build
-      - run: pnpm exec tsx --test scripts/mesa-seed.test.ts scripts/mesa-market.test.ts scripts/mesa-v3-agent.test.ts scripts/mesa-schedule-window.test.ts scripts/mesa-v3-connections.test.ts scripts/mesa-axiom-collect.test.ts
+      - run: pnpm exec tsx --test scripts/mesa-seed.test.ts scripts/mesa-market.test.ts scripts/mesa-v3-agent.test.ts scripts/mesa-schedule-window.test.ts scripts/mesa-v3-connections.test.ts scripts/mesa-axiom-collect.test.ts scripts/axiom-ledger.test.ts
       - name: Stage local runtime
         shell: pwsh
         run: |
