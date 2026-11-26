@@ -94,6 +94,7 @@ export function installDeskMarket(app: Express, db: DatabaseSync) {
   });
   app.put("/api/desk/market/agents/:id/permission",(req,res)=>{
     const id=String(req.params.id);
+    if(id==="axiom-01")return res.status(403).json({error:"AXIOM exige seu próprio adaptador de execução validado; carteira sintética bloqueada."});
     if(!agentExists(id)) return res.status(404).json({error:"Agente não encontrado"});
     if(typeof req.body?.enabled!=="boolean") return res.status(400).json({error:"Permissão inválida"});
     ensure(id); db.prepare("UPDATE desk_market_accounts SET enabled=? WHERE agent_id=?").run(Number(req.body.enabled),id);
@@ -101,6 +102,7 @@ export function installDeskMarket(app: Express, db: DatabaseSync) {
   });
   app.post("/api/desk/market/agents/:id/orders",(req,res)=>{
     const id=String(req.params.id), body=req.body??{};
+    if(id==="axiom-01")return res.status(403).json({error:"AXIOM não opera com preços sintéticos; execução pendente de validação."});
     if(!agentExists(id)) return res.status(404).json({error:"Agente não encontrado"});
     const {symbol,side,quantity,order_id}=body;
     if(typeof symbol!=="string"||!lookup(symbol)||!["buy","sell"].includes(side)||!Number.isSafeInteger(quantity)||quantity<1||quantity>10000||typeof order_id!=="string"||!/^[a-zA-Z0-9_-]{8,100}$/.test(order_id))

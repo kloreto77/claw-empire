@@ -14,6 +14,11 @@ try{
  await scene.getByRole("combobox",{name:"Selecionar agente"}).waitFor();
  assert.equal(await scene.getByRole("combobox",{name:"Selecionar agente"}).locator("option").count(),9);
  await page.screenshot({path:"mesa-v3-visual/escritorio.png"});
+ await page.getByRole("button",{name:"AXIOM",exact:true}).click();
+ await page.getByRole("button",{name:"Cadastrar AXIOM e iniciar coleta",exact:true}).waitFor();
+ await page.getByText("Modo coleta. Nenhuma operação financeira autorizada;",{exact:false}).waitFor();
+ await page.screenshot({path:"mesa-v3-visual/axiom.png"});
+ await page.getByRole("button",{name:"Fechar AXIOM"}).click();
  await scene.getByRole("combobox",{name:"Selecionar agente"}).selectOption("1");
  await scene.getByRole("button",{name:"Configurar agente",exact:true}).click();
  await page.getByRole("button",{name:"Instruções",exact:true}).click();

@@ -1,6 +1,7 @@
 import DeskSettings from "../components/mesa-v3/DeskSettings";
 import { statusName } from "../components/mesa-v3/Office";
 import Office3D from "../components/mesa-v3/Office3D";
+import AxiomPanel from "../components/mesa-v3/AxiomPanel";
 import { createAgent } from "../api";
 import AgentDrawer from "../components/mesa-v3/AgentDrawer";
 import { useMarket, MarketScreen, Ranking } from "../components/mesa-v3/market";
@@ -372,10 +373,11 @@ export default function AppMainLayout({
   // kept above: pack scoping and persistence; the desk is now the primary interface.
   const [screen,setScreen]=useState<"office"|"market"|"ranking"|"settings">("office");
   const [selectedId,setSelectedId]=useState<string|null>(null);
+  const [axiomOpen,setAxiomOpen]=useState(false);
   const {market,error}=useMarket();
   const visibleAgents=officePresentation.agents;
   const chosen=visibleAgents.find(a=>a.id===selectedId);
-  const select=(id:string)=>{if(visibleAgents.some(a=>a.id===id))setSelectedId(id);};
+  const select=(id:string)=>{if(id==="axiom-01"){setSelectedId(null);setAxiomOpen(true);return;}if(visibleAgents.some(a=>a.id===id))setSelectedId(id);};
   const navigate=(next:typeof screen)=>{setScreen(next);setView("office");};
   const legacy=view==="tasks"||view==="skills"||view==="agents"||view==="settings";
   return (
@@ -383,7 +385,7 @@ export default function AppMainLayout({
       <div className="mv3-shell" lang="pt-BR">
         <header className="mv3-header"><span className="mv3-brand">MESA DE OPERAÇÕES</span><nav aria-label="Navegação principal">
           {([["office","Escritório"],["market","Mercado"],["ranking","Desempenho"],["settings","Configurações"]] as const).map(([id,label])=><button key={id} aria-pressed={screen===id} onClick={()=>navigate(id)}>{label}</button>)}
-        </nav><span className="mv3-connection">{connected?"● Servidor conectado":"○ Servidor desconectado"}</span></header>
+        </nav><button onClick={()=>{setSelectedId(null);setAxiomOpen(true);}}>AXIOM</button><span className="mv3-connection">{connected?"● Servidor conectado":"○ Servidor desconectado"}</span></header>
         <main className="mv3-content">
           {screen==="office"&&!legacy&&<Office3D connected={connected} inlineCreate={officePackKey==="development"} onTeam={()=>setView("agents")} onRanking={()=>navigate("ranking")} onConnections={()=>navigate("settings")} onCreateAgent={async(name,role)=>{if(!connected||officePackKey!=="development")throw new Error("Cadastro indisponível neste escritório.");if(visibleAgents.length>=12)throw new Error("Todas as estações estão ocupadas.");if(visibleAgents.some(a=>a.name.trim().toLowerCase()===name.toLowerCase()))throw new Error("Já existe um agente com este nome.");const a=await createAgent({name,name_ko:name,name_ja:name,name_zh:name,department_id:departments.some(d=>d.id==="operations")?"operations":null,role,cli_provider:"",avatar_emoji:"🤖",personality:null,workflow_pack_key:officePackKey});onAgentsChange();return a;}} agents={visibleAgents} tasks={tasksForActivePack} meetings={meetingPresence} deliveries={crossDeptDeliveries} calls={ceoOfficeCalls} market={market} onSelect={a=>select(a.id)} onMeeting={()=>activeMeetingTaskId?onOpenActiveMeetingMinutes(activeMeetingTaskId):onOpenReportHistory()} onDeliveryDone={onCrossDeptDeliveryProcessed} onCallDone={onCeoOfficeCallProcessed} onMarket={()=>navigate("market")}/>}
           {screen==="market"&&!legacy&&<MarketScreen market={market} error={error} onSelect={select}/>}
@@ -396,7 +398,8 @@ export default function AppMainLayout({
             {view==="settings"&&<SettingsPanel settings={settings} cliStatus={cliStatus} onSave={next=>void onSaveSettings(next)} onRefreshCli={()=>void onRefreshCli()} oauthResult={oauthResult} onOauthResultClear={onOauthResultClear}/>}
           </div>}
         </main>
-        {chosen&&<AgentDrawer key={chosen.id} agent={chosen} agents={visibleAgents} tasks={tasksForActivePack} onClose={()=>setSelectedId(null)} onUpdated={onAgentsChange} onChat={()=>{setSelectedId(null);(onChatWithAgent??onSelectAgent)(chosen);}} onAssign={()=>{setSelectedId(null);setView("tasks");}} onLogs={id=>{setSelectedId(null);onOpenTerminal(id);}} onSkills={()=>{setSelectedId(null);setView("skills");}}/>}
+        {axiomOpen&&<AxiomPanel onClose={()=>setAxiomOpen(false)} onChanged={onAgentsChange}/>}
+        {chosen&&!axiomOpen&&<AgentDrawer key={chosen.id} agent={chosen} agents={visibleAgents} tasks={tasksForActivePack} onClose={()=>setSelectedId(null)} onUpdated={onAgentsChange} onChat={()=>{setSelectedId(null);(onChatWithAgent??onSelectAgent)(chosen);}} onAssign={()=>{setSelectedId(null);setView("tasks");}} onLogs={id=>{setSelectedId(null);onOpenTerminal(id);}} onSkills={()=>{setSelectedId(null);setView("skills");}}/>}
         {children}
       </div>
     </I18nProvider>

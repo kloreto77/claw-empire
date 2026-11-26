@@ -1,0 +1,8 @@
+# AXIOM — integração de coleta, fase 1
+Base: Mesa 3.1.0. Prévia 3.1.1, NÃO corresponde à implementação integral do pacote AXIOM V1.
+- Clique AXIOM no cabeçalho e Cadastrar AXIOM e iniciar coleta. Cadastro id fixo axiom-01, sem sobrescrever outros agentes, sujeito à capacidade de 12 estações.
+- Coleta pública Binance Spot, descoberta de universo provisório por volume, livro L2 com U/u e snapshot, aggTrades, FX USDTBRL quando disponível, amostragem de bandas 5/10/25/50 bps e fluxo. Arquivos NDJSON no diretório de logs/axiom-01. Sem ordens, chaves de corretora ou chamadas LLM.
+- O coletor é temporariamente Node/TS dentro do backend da Mesa para reduzir dependências de instalação. Worker Python isolado, armazenamento Parquet/DuckDB, histórico e replay causal, filtros completos de elegibilidade, benchmark e retenção ficam pendentes. Limite de disco provisório 2 GiB; atingir limite interrompe coleta, não apaga arquivos. Coleta só enquanto servidor roda; auto-start desativado.
+- APIs da carteira sintética bloqueadas para axiom-01. Não se autoriza operação por prompt nem por teste. Capital e orçamento são requisitos, não ledger implementado.
+- Testes iniciais: livro, gaps, bandas, universo, estado e bloqueio da carteira antiga. Teste real de conectividade e estabilidade no ambiente de execução ainda necessário.
+- Próximos gates do pacote original: ledger transacional fracionário, três motores, 30/7/7 dias de treino/calibração/validação interna com embargo 120 min, holdout posterior de pelo menos 30 dias, supervisor Qwen/skills e laboratório sombra. Não confundir esta coleta com prontidão de negociação.
