@@ -24,6 +24,7 @@ import { startLifecycle } from "./modules/lifecycle.ts";
 import { installAgentScheduler } from "./modules/desk-scheduler.ts";
 import { recoverLocalDeskTasks } from "./modules/lifecycle/local-desk-recovery.ts";
 import { installDeskToolRegistry } from "./modules/desk-tool-registry.ts";
+import { installDeskMarket } from "./modules/desk-market.ts";
 import { installDeskUsage } from "./modules/desk-usage.ts";
 import { registerApiRoutes } from "./modules/routes.ts";
 import { initializeWorkflow } from "./modules/workflow.ts";
@@ -137,4 +138,5 @@ assertRuntimeFunctionsResolved(runtimeContext, ROUTE_RUNTIME_HELPER_KEYS, "route
 installAgentScheduler(app, db);
 installDeskToolRegistry(app, db);
 installDeskUsage(app, db);
+installDeskMarket(app, db);
 startLifecycle(runtimeContext as RuntimeContext);

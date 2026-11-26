@@ -1,4 +1,8 @@
-import { useCallback, useMemo, type ReactNode } from "react";
+import Office, { statusName } from "../components/mesa-v3/Office";
+import AgentDrawer from "../components/mesa-v3/AgentDrawer";
+import { useMarket, MarketScreen, Ranking } from "../components/mesa-v3/market";
+import "../components/mesa-v3/mesa.css";
+import { useCallback, useMemo, useState, type ReactNode } from "react";
 import Sidebar from "../components/Sidebar";
 import OfficeView from "../components/OfficeView";
 import OperationsMonitor from "../components/OperationsMonitor";
@@ -359,309 +363,34 @@ export default function AppMainLayout({
     [onCreateTask, officePackKey],
   );
 
+
+  // kept above: pack scoping and persistence; the desk is now the primary interface.
+  const [screen,setScreen]=useState<"office"|"market"|"ranking"|"settings">("office");
+  const [selectedId,setSelectedId]=useState<string|null>(null);
+  const {market,error}=useMarket();
+  const visibleAgents=officePresentation.agents;
+  const chosen=visibleAgents.find(a=>a.id===selectedId);
+  const select=(id:string)=>{if(visibleAgents.some(a=>a.id===id))setSelectedId(id);};
+  const navigate=(next:typeof screen)=>{setScreen(next);setView(next==="settings"?"settings":"office");};
+  const legacy=view==="tasks"||view==="skills"||view==="agents"||view==="settings";
   return (
     <I18nProvider language={labels.uiLanguage}>
-      <div className="app-shell flex h-[100dvh] min-h-[100dvh] overflow-hidden">
-        <div className="hidden lg:flex lg:flex-shrink-0">
-          <Sidebar
-            currentView={view}
-            onChangeView={setView}
-            departments={officePresentation.departments}
-            agents={officePresentation.agents}
-            settings={settings}
-            connected={connected}
-          />
-        </div>
-
-        {mobileNavOpen && (
-          <button
-            aria-label="Close navigation"
-            className="fixed inset-0 z-40 bg-black/50 lg:hidden"
-            onClick={() => setMobileNavOpen(false)}
-          />
-        )}
-        <div
-          className={`fixed inset-y-0 left-0 z-50 transition-transform duration-200 lg:hidden ${
-            mobileNavOpen ? "translate-x-0" : "-translate-x-full pointer-events-none"
-          }`}
-        >
-          <Sidebar
-            currentView={view}
-            onChangeView={(nextView) => {
-              setView(nextView);
-              setMobileNavOpen(false);
-            }}
-            departments={officePresentation.departments}
-            agents={officePresentation.agents}
-            settings={settings}
-            connected={connected}
-          />
-        </div>
-
-        <main className="flex-1 overflow-y-auto overflow-x-hidden min-w-0">
-          <AppHeaderBar
-            currentView={view}
-            connected={connected}
-            viewTitle={labels.viewTitle}
-            tasksPrimaryLabel={labels.tasksPrimaryLabel}
-            decisionLabel={labels.decisionLabel}
-            decisionInboxLoading={decisionInboxLoading}
-            decisionInboxCount={decisionInboxCount}
-            agentStatusLabel={labels.agentStatusLabel}
-            reportLabel={labels.reportLabel}
-            announcementLabel={labels.announcementLabel}
-            roomManagerLabel={labels.roomManagerLabel}
-            theme={theme}
-            mobileHeaderMenuOpen={mobileHeaderMenuOpen}
-            onOpenMobileNav={() => setMobileNavOpen(true)}
-            onOpenTasks={() => setView("tasks")}
-            onOpenDecisionInbox={onOpenDecisionInbox}
-            onOpenAgentStatus={onOpenAgentStatus}
-            onOpenReportHistory={onOpenReportHistory}
-            onOpenAnnouncement={onOpenAnnouncement}
-            onOpenRoomManager={onOpenRoomManager}
-            officePackControl={
-              view === "agents" || view === "tasks"
-                ? {
-                    label: officePackLabel,
-                    value: officePackKey,
-                    options: officePackOptions,
-                    onChange: onChangeOfficeWorkflowPack,
-                  }
-                : null
-            }
-            onToggleTheme={toggleTheme}
-            onToggleMobileHeaderMenu={() => setMobileHeaderMenuOpen(!mobileHeaderMenuOpen)}
-            onCloseMobileHeaderMenu={() => setMobileHeaderMenuOpen(false)}
-          />
-
-          {officePackBootstrappingMessage && (
-            <div className="border-b border-emerald-500/30 bg-emerald-500/10 px-3 py-2.5 sm:px-4 lg:px-6">
-              <div className="text-xs font-medium text-emerald-100">{officePackBootstrappingMessage}</div>
-            </div>
-          )}
-
-          {labels.autoUpdateNoticeVisible && (
-            <div className={labels.autoUpdateNoticeContainerClass}>
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                <div className={labels.autoUpdateNoticeTextClass}>
-                  <div className="font-medium">{labels.autoUpdateNoticeTitle}</div>
-                  <div className={labels.autoUpdateNoticeHintClass}>{labels.autoUpdateNoticeHint}</div>
-                </div>
-                <div className="flex shrink-0 items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      void onDismissAutoUpdateNotice();
-                    }}
-                    className={labels.autoUpdateNoticeButtonClass}
-                  >
-                    {labels.autoUpdateNoticeActionLabel}
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {labels.updateBannerVisible && labels.effectiveUpdateStatus && (
-            <div className="border-b border-amber-500/30 bg-amber-500/10 px-3 py-2.5 sm:px-4 lg:px-6">
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                <div className="min-w-0 text-xs text-amber-100">
-                  <div className="font-medium">{labels.updateTitle}</div>
-                  <div className="mt-0.5 text-[11px] text-amber-200/90">{labels.updateHint}</div>
-                  {labels.updateTestModeHint && (
-                    <div className="mt-0.5 text-[11px] text-amber-300/90">{labels.updateTestModeHint}</div>
-                  )}
-                </div>
-                <div className="flex shrink-0 items-center gap-2">
-                  <a
-                    href={labels.updateReleaseUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="rounded-md border border-amber-300/40 bg-amber-200/10 px-2.5 py-1 text-[11px] text-amber-100 transition hover:bg-amber-200/20"
-                  >
-                    {labels.updateReleaseLabel}
-                  </a>
-                  <button
-                    type="button"
-                    onClick={onDismissUpdate}
-                    className="rounded-md border border-slate-500/40 bg-slate-700/30 px-2.5 py-1 text-[11px] text-slate-100 transition hover:bg-slate-700/50"
-                  >
-                    {labels.updateDismissLabel}
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          <div className="p-3 sm:p-4 lg:p-6">
-            {view === "office" && (
-              <section
-                aria-label="Resumo da mesa de operações"
-                className="mb-4 rounded-xl border p-3 sm:p-4"
-                style={{ borderColor: "var(--th-border)", background: "var(--th-bg-surface)" }}
-              >
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <h2 className="text-base font-semibold" style={{ color: "var(--th-text-heading)" }}>
-                      Mesa de Operações
-                    </h2>
-                    <p className="mt-1 text-xs" style={{ color: "var(--th-text-muted)" }}>
-                      {connected ? "Servidor conectado" : "Servidor desconectado — dados podem estar desatualizados"}
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      className="header-action-btn header-action-btn-primary"
-                      onClick={() => setView("agents")}
-                    >
-                      Gerenciar agentes
-                    </button>
-                    <button
-                      type="button"
-                      className="header-action-btn header-action-btn-secondary"
-                      onClick={() => setView("tasks")}
-                    >
-                      Operações
-                    </button>
-                    <button
-                      type="button"
-                      className="header-action-btn header-action-btn-secondary"
-                      onClick={() => setView("settings")}
-                    >
-                      Conexões e modelos
-                    </button>
-                  </div>
-                </div>
-                <dl className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
-                  {[
-                    { label: "Agentes no escritório", value: officePresentation.agents.length },
-                    {
-                      label: "Trabalhando",
-                      value: officePresentation.agents.filter((agent) => agent.status === "working").length,
-                    },
-                    {
-                      label: "Disponíveis",
-                      value: officePresentation.agents.filter((agent) => agent.status === "idle").length,
-                    },
-                    { label: "Tarefas registradas", value: tasksForActivePack.length },
-                  ].map(({ label, value }) => (
-                    <div
-                      key={label}
-                      className="rounded-lg border px-3 py-2"
-                      style={{ borderColor: "var(--th-border)" }}
-                    >
-                      <dt className="text-xs" style={{ color: "var(--th-text-muted)" }}>
-                        {label}
-                      </dt>
-                      <dd
-                        className="mt-1 text-xl font-semibold tabular-nums"
-                        style={{ color: "var(--th-text-heading)" }}
-                      >
-                        {value}
-                      </dd>
-                    </div>
-                  ))}
-                </dl>
-                {officePresentation.agents.length === 0 && (
-                  <p className="mt-3 text-xs" style={{ color: "var(--th-text-muted)" }}>
-                    Nenhum agente neste escritório. Use Gerenciar agentes para configurar o primeiro quando quiser.
-                  </p>
-                )}
-              </section>
-            )}
-
-            {view === "office" && (
-              <OfficeView
-                departments={officePresentation.departments}
-                agents={officePresentation.agents}
-                tasks={tasks}
-                subAgents={subAgents}
-                meetingPresence={meetingPresence}
-                activeMeetingTaskId={activeMeetingTaskId}
-                unreadAgentIds={unreadAgentIds}
-                crossDeptDeliveries={crossDeptDeliveries}
-                onCrossDeptDeliveryProcessed={onCrossDeptDeliveryProcessed}
-                ceoOfficeCalls={ceoOfficeCalls}
-                onCeoOfficeCallProcessed={onCeoOfficeCallProcessed}
-                onOpenActiveMeetingMinutes={onOpenActiveMeetingMinutes}
-                customDeptThemes={officePresentation.roomThemes}
-                themeHighlightTargetId={activeRoomThemeTargetId}
-                onSelectAgent={onSelectAgent}
-                onSelectDepartment={onSelectDepartment}
-              />
-            )}
-
-            {view === "dashboard" && (
-              <OperationsMonitor
-                agents={officePresentation.agents}
-                tasks={tasksForActivePack}
-                connected={connected}
-                onSelectAgent={onSelectAgent}
-                onOpenTerminal={onOpenTerminal}
-                onOpenTasks={() => setView("tasks")}
-              />
-            )}
-
-            {view === "tasks" && (
-              <TaskBoard
-                tasks={tasksForActivePack}
-                agents={displayAgents}
-                departments={displayDepartments}
-                subtasks={subtasks}
-                onCreateTask={handleCreateTaskForActivePack}
-                onUpdateTask={onUpdateTask}
-                onDeleteTask={onDeleteTask}
-                onAssignTask={onAssignTask}
-                onRunTask={onRunTask}
-                onStopTask={onStopTask}
-                onPauseTask={onPauseTask}
-                onResumeTask={onResumeTask}
-                onOpenTerminal={onOpenTerminal}
-                onOpenMeetingMinutes={onOpenMeetingMinutes}
-              />
-            )}
-
-            {view === "agents" && (
-              <AgentManager
-                agents={managerAgents}
-                departments={managerDepartments}
-                onAgentsChange={onAgentsChange}
-                activeOfficeWorkflowPack={officePackKey}
-                dbBackedOfficePack={isHydratedOfficePack}
-                onSaveOfficePackProfile={async (packKey, profile) => {
-                  if (packKey === "development") return;
-                  await onSaveSettings({
-                    ...settings,
-                    officePackProfiles: {
-                      ...(settings.officePackProfiles ?? {}),
-                      [packKey]: profile,
-                    },
-                  });
-                }}
-              />
-            )}
-
-            {view === "skills" && <SkillsLibrary agents={agents} />}
-
-            {view === "settings" && (
-              <SettingsPanel
-                settings={settings}
-                cliStatus={cliStatus}
-                onSave={(nextSettings) => {
-                  void onSaveSettings(nextSettings);
-                }}
-                onRefreshCli={() => {
-                  void onRefreshCli();
-                }}
-                oauthResult={oauthResult}
-                onOauthResultClear={onOauthResultClear}
-              />
-            )}
-          </div>
+      <div className="mv3-shell" lang="pt-BR">
+        <header className="mv3-header"><span className="mv3-brand">MESA DE OPERAÇÕES</span><nav aria-label="Navegação principal">
+          {([["office","Escritório"],["market","Mercado"],["ranking","Desempenho"],["settings","Configurações"]] as const).map(([id,label])=><button key={id} aria-pressed={screen===id} onClick={()=>navigate(id)}>{label}</button>)}
+        </nav><span className="mv3-connection">{connected?"● Servidor conectado":"○ Servidor desconectado"}</span></header>
+        <main className="mv3-content">
+          {screen==="office"&&!legacy&&<Office agents={visibleAgents} tasks={tasksForActivePack} meetings={meetingPresence} deliveries={crossDeptDeliveries} calls={ceoOfficeCalls} market={market} onSelect={a=>select(a.id)} onMeeting={()=>activeMeetingTaskId?onOpenActiveMeetingMinutes(activeMeetingTaskId):onOpenReportHistory()} onDeliveryDone={onCrossDeptDeliveryProcessed} onCallDone={onCeoOfficeCallProcessed} onMarket={()=>navigate("market")}/>}
+          {screen==="market"&&!legacy&&<MarketScreen market={market} error={error} onSelect={select}/>}
+          {screen==="ranking"&&!legacy&&<div className="mv3-page"><h2>Desempenho</h2>{error&&<p role="alert">Dados de mercado temporariamente indisponíveis.</p>}<Ranking market={market} onSelect={select}/><h3>Atividade operacional</h3><table><thead><tr><th>Agente</th><th>Status</th><th>Tarefas concluídas</th></tr></thead><tbody>{visibleAgents.map(a=><tr key={a.id}><td><button className="mv3-link" onClick={()=>select(a.id)}>{a.name}</button></td><td>{statusName(a)}</td><td>{a.stats_tasks_done}</td></tr>)}</tbody></table></div>}
+          {legacy&&<div className="mv3-legacy"><div className="mv3-legacy-nav"><button onClick={()=>navigate("office")}>Voltar ao escritório</button><button onClick={()=>setView("agents")}>Equipe</button><button onClick={()=>setView("tasks")}>Tarefas</button><button onClick={()=>setView("skills")}>Skills</button><button onClick={()=>setView("settings")}>Conexões gerais</button><button onClick={onOpenDecisionInbox}>Decisões ({decisionInboxCount})</button><button onClick={onOpenReportHistory}>Relatórios</button></div>
+            {view==="tasks"&&<TaskBoard tasks={tasksForActivePack} agents={displayAgents} departments={displayDepartments} subtasks={subtasks} onCreateTask={handleCreateTaskForActivePack} onUpdateTask={onUpdateTask} onDeleteTask={onDeleteTask} onAssignTask={onAssignTask} onRunTask={onRunTask} onStopTask={onStopTask} onPauseTask={onPauseTask} onResumeTask={onResumeTask} onOpenTerminal={onOpenTerminal} onOpenMeetingMinutes={onOpenMeetingMinutes}/>}
+            {view==="agents"&&<AgentManager agents={managerAgents} departments={managerDepartments} onAgentsChange={onAgentsChange} activeOfficeWorkflowPack={officePackKey} dbBackedOfficePack={isHydratedOfficePack} onSaveOfficePackProfile={async(packKey,profile)=>{if(packKey==="development")return;await onSaveSettings({...settings,officePackProfiles:{...(settings.officePackProfiles??{}),[packKey]:profile}});}}/>}
+            {view==="skills"&&<SkillsLibrary agents={agents}/>}
+            {view==="settings"&&<SettingsPanel settings={settings} cliStatus={cliStatus} onSave={next=>void onSaveSettings(next)} onRefreshCli={()=>void onRefreshCli()} oauthResult={oauthResult} onOauthResultClear={onOauthResultClear}/>}
+          </div>}
         </main>
-
+        {chosen&&<AgentDrawer key={chosen.id} agent={chosen} agents={visibleAgents} tasks={tasksForActivePack} onClose={()=>setSelectedId(null)} onUpdated={onAgentsChange} onChat={()=>{setSelectedId(null);onSelectAgent(chosen);}} onAssign={()=>{setSelectedId(null);setView("tasks");}} onLogs={id=>{setSelectedId(null);onOpenTerminal(id);}} onSkills={()=>{setSelectedId(null);setView("skills");}}/>}
         {children}
       </div>
     </I18nProvider>
