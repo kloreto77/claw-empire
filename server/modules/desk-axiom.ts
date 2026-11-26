@@ -4,6 +4,8 @@ import { mkdirSync, readdirSync, statSync, appendFileSync } from "node:fs";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import WebSocket from "ws";
+import {MinuteFeatures} from "./axiom-features.ts";
+import {AxiomLedger} from "./axiom-ledger.ts";
 
 export const AXIOM_ID = "axiom-01";
 const REST="https://data-api.binance.vision/api/v3";
@@ -59,6 +61,8 @@ export function universe(info:Info[],tickers:Ticker[]){
 export function installAxiom(app:Express,db:DatabaseSync,logsDir:string){
   const root=join(logsDir,"axiom-01");mkdirSync(root,{recursive:true});
   db.exec("CREATE TABLE IF NOT EXISTS axiom_events(id TEXT PRIMARY KEY,ts INTEGER NOT NULL,kind TEXT NOT NULL,detail TEXT NOT NULL); CREATE INDEX IF NOT EXISTS axiom_event_ts ON axiom_events(ts);");
+  const minuteFeatures=new MinuteFeatures(),ledger=new AxiomLedger(db);
+  let minutes=0,liquidityMinutes=0;
   let desired=false,stage="STOPPED",error="",symbols:string[]=[],lastSample=0,valid=0,samples=0,fx:{symbol:string;bid:number;ask:number;ts:number}|null=null;
   let ws:WebSocket|null=null,retry:ReturnType<typeof setTimeout>|null=null,sampler:ReturnType<typeof setInterval>|null=null,abort:AbortController|null=null,epoch=0,backoff=10000,runId="";
   let disk=readdirSync(root).filter(f=>f.endsWith(".ndjson")).reduce((n,f)=>n+statSync(join(root,f)).size,0);
@@ -75,7 +79,7 @@ export function installAxiom(app:Express,db:DatabaseSync,logsDir:string){
     appendFileSync(join(root,new Date().toISOString().slice(0,10)+".ndjson"),queue.join(""),"utf8");
     disk+=queueBytes;queue=[];queueBytes=0;
   }
-  function clear(){epoch++;abort?.abort();abort=null;if(retry)clearTimeout(retry);retry=null;if(sampler)clearInterval(sampler);sampler=null;if(ws){ws.removeAllListeners();ws.on("error",()=>{});ws.terminate();ws=null;}books.clear();buffers.clear();valid=0;fx=null;}
+  function clear(){epoch++;abort?.abort();abort=null;if(retry)clearTimeout(retry);retry=null;if(sampler)clearInterval(sampler);sampler=null;if(ws){ws.removeAllListeners();ws.on("error",()=>{});ws.terminate();ws=null;}books.clear();buffers.clear();minuteFeatures.reset();valid=0;fx=null;}
   function stop(reason:string){desired=false;clear();try{flush();}catch(e){error=String(e);}stage="STOPPED";event("STOP",reason);}
   function fault(e:unknown,delay?:number){
     error=e instanceof Error?e.message:String(e);clear();
@@ -158,7 +162,7 @@ export function installAxiom(app:Express,db:DatabaseSync,logsDir:string){
           if(now-lastMessage>30000)throw Error("stream sem mensagens");
           if(now-started>23*3600000+50*60000)throw Error("rotação preventiva do stream");
           let n=0;if(stage==="COLLECT_ONLY"){
-            for(const [symbol,b] of books){const f=features(b,now);b.flow=0;if(f){record("FEATURE_1S",{symbol,...f,fx:fx&&now-fx.ts<=60000?fx:null},now);n++;samples++;}}
+            for(const [symbol,b] of books){const f=features(b,now);b.flow=0;if(f){record("FEATURE_1S",{symbol,...f,fx:fx&&now-fx.ts<=60000?fx:null},now);n++;samples++;const result=minuteFeatures.push(symbol,now,f);if(result){record("FEATURE_1M",{symbol,...result.minute},now);minutes++;if(result.liquidity){record("LIQUIDITY_W1",{symbol,minute_end:result.minute.end,...result.liquidity,method:"grouped_band_midpoints"},now);liquidityMinutes++;}}}}
             valid=n;if(n)lastSample=now;
           }
           flush();
@@ -166,7 +170,7 @@ export function installAxiom(app:Express,db:DatabaseSync,logsDir:string){
       },1000);sampler.unref();
     }catch(e){if(gen===epoch)fault(e,(e as {wait?:number})?.wait);}
   }
-  const status=()=>({installed:Boolean(db.prepare("SELECT 1 FROM agents WHERE id=?").get(AXIOM_ID)),stage,desired,error,symbols,valid,samples,lastSample,fx:fx&&Date.now()-fx.ts<=60000?fx:null,disk_bytes:disk+queueBytes,disk_limit:CAP,paper_enabled:false,blockers:["Histórico L2 e filtros de universo não validados","Motores completos e calibração pendentes","Ledger fracionário e FX de execução pendentes","Supervisor Qwen e laboratório pendentes"],events:db.prepare("SELECT id,ts,kind,detail FROM axiom_events ORDER BY ts DESC LIMIT 30").all()});
+  const status=()=>({installed:Boolean(db.prepare("SELECT 1 FROM agents WHERE id=?").get(AXIOM_ID)),stage,desired,error,symbols,valid,samples,lastSample,minutes,liquidityMinutes,ledger:db.prepare("SELECT 1 FROM agents WHERE id=?").get(AXIOM_ID)?ledger.status(Date.now()):null,fx:fx&&Date.now()-fx.ts<=60000?fx:null,disk_bytes:disk+queueBytes,disk_limit:CAP,paper_enabled:false,blockers:["Histórico L2 e filtros de universo não validados","Motores completos e calibração pendentes","Ledger fracionário implementado; simulador IOC e FX de execução pendentes","Supervisor Qwen e laboratório pendentes"],events:db.prepare("SELECT id,ts,kind,detail FROM axiom_events ORDER BY ts DESC LIMIT 30").all()});
   app.get("/api/desk/axiom/status",(_req,res)=>res.json(status()));
   app.post("/api/desk/axiom/start",(_req,res)=>{
     if(!db.prepare("SELECT 1 FROM agents WHERE id=?").get(AXIOM_ID)){
