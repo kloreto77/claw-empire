@@ -15,7 +15,7 @@ export function useMarket(){
   return {market,error};
 }
 export function Ranking({market,compact=false,onSelect}:{market:Market|null;compact?:boolean;onSelect?:(id:string)=>void}){
-  const rows=market?.accounts??[];
+  const rows=[...(market?.accounts??[])].sort((a,b)=>Number(b.trades>0)-Number(a.trades>0)||(b.return_pct-b.drawdown_pct*.5)-(a.return_pct-a.drawdown_pct*.5));
   return <div className="mv3-ranking"><h3>Ranking dos operadores</h3><p className="mv3-muted">Pontuação: retorno − 0,5 × perda máxima observada. Sem operações, sem classificação.</p><table><thead><tr><th>Agente</th><th>Retorno</th>{!compact&&<><th>Perda máx.</th><th>Acerto</th><th>Ordens</th><th>Patrimônio</th></>}</tr></thead><tbody>{rows.slice(0,compact?5:rows.length).map((a,i)=><tr key={a.agent_id}><td><button className="mv3-link" onClick={()=>onSelect?.(a.agent_id)}>{a.trades?i+1:"—"} · {a.name}</button></td><td className={a.return_pct<0?"mv3-loss":"mv3-gain"}>{pct(a.return_pct)}</td>{!compact&&<><td>{pct(a.drawdown_pct)}</td><td>{a.win_pct===null?"—":pct(a.win_pct)}</td><td>{a.trades}</td><td>{money(a.equity)}</td></>}</tr>)}</tbody></table>{!rows.length&&<p>Carregando carteiras…</p>}</div>;
 }
 function Chart({asset}:{asset:Asset}){

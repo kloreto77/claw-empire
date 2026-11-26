@@ -423,6 +423,7 @@ export default function App() {
       onCeoOfficeCallProcessed={(id) => setCeoOfficeCalls((prev) => prev.filter((d) => d.id !== id))}
       onOpenActiveMeetingMinutes={(taskId) => setTaskPanel({ taskId, tab: "minutes" })}
       onSelectAgent={setSelectedAgent}
+      onChatWithAgent={actions.handleOpenChat}
       onSelectDepartment={(department) => {
         const candidateAgents = overlayAgents;
         const leader =

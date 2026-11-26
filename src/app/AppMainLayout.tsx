@@ -100,6 +100,7 @@ interface AppMainLayoutProps {
   onCeoOfficeCallProcessed: (id: string) => void;
   onOpenActiveMeetingMinutes: (taskId: string) => void;
   onSelectAgent: (agent: Agent) => void;
+  onChatWithAgent?: (agent: Agent) => void;
   onSelectDepartment: (department: Department) => void;
   onCreateTask: (input: {
     title: string;
@@ -170,6 +171,7 @@ export default function AppMainLayout({
   onCeoOfficeCallProcessed,
   onOpenActiveMeetingMinutes,
   onSelectAgent,
+  onChatWithAgent,
   onSelectDepartment,
   onCreateTask,
   onUpdateTask,
@@ -390,7 +392,7 @@ export default function AppMainLayout({
             {view==="settings"&&<SettingsPanel settings={settings} cliStatus={cliStatus} onSave={next=>void onSaveSettings(next)} onRefreshCli={()=>void onRefreshCli()} oauthResult={oauthResult} onOauthResultClear={onOauthResultClear}/>}
           </div>}
         </main>
-        {chosen&&<AgentDrawer key={chosen.id} agent={chosen} agents={visibleAgents} tasks={tasksForActivePack} onClose={()=>setSelectedId(null)} onUpdated={onAgentsChange} onChat={()=>{setSelectedId(null);onSelectAgent(chosen);}} onAssign={()=>{setSelectedId(null);setView("tasks");}} onLogs={id=>{setSelectedId(null);onOpenTerminal(id);}} onSkills={()=>{setSelectedId(null);setView("skills");}}/>}
+        {chosen&&<AgentDrawer key={chosen.id} agent={chosen} agents={visibleAgents} tasks={tasksForActivePack} onClose={()=>setSelectedId(null)} onUpdated={onAgentsChange} onChat={()=>{setSelectedId(null);(onChatWithAgent??onSelectAgent)(chosen);}} onAssign={()=>{setSelectedId(null);setView("tasks");}} onLogs={id=>{setSelectedId(null);onOpenTerminal(id);}} onSkills={()=>{setSelectedId(null);setView("skills");}}/>}
         {children}
       </div>
     </I18nProvider>
