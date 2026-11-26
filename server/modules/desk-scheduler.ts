@@ -15,6 +15,17 @@ type Schedule = {
   in_flight: number;
 };
 
+type ScheduleWindow={days:number[];start:string;end:string;timezone:string};
+const defaultWindow:ScheduleWindow={days:[0,1,2,3,4,5,6],start:"00:00",end:"24:00",timezone:"America/Sao_Paulo"};
+export function validScheduleWindow(w:ScheduleWindow){
+  if(!Array.isArray(w.days)||!w.days.length||w.days.some(d=>!Number.isInteger(d)||d<0||d>6)||!/^([01]\d|2[0-3]):[0-5]\d$/.test(w.start)||!/^(([01]\d|2[0-3]):[0-5]\d|24:00)$/.test(w.end)||w.start>=w.end||typeof w.timezone!=="string"||w.timezone.length>80)return false;
+  try{new Intl.DateTimeFormat("en-US",{timeZone:w.timezone});return true;}catch{return false;}
+}
+export function withinScheduleWindow(now:number,w:ScheduleWindow){
+  const parts=new Intl.DateTimeFormat("en-US",{timeZone:w.timezone,weekday:"short",hour:"2-digit",minute:"2-digit",hourCycle:"h23"}).formatToParts(now);
+  const get=(t:string)=>parts.find(p=>p.type===t)?.value??"";
+  const day=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].indexOf(get("weekday")),time=get("hour")+":"+get("minute");return w.days.includes(day)&&time>=w.start&&time<w.end;
+}
 export function installAgentScheduler(app: Express, db: DatabaseSync): void {
   db.exec(`
     CREATE TABLE IF NOT EXISTS desk_agent_schedules (
@@ -29,11 +40,17 @@ export function installAgentScheduler(app: Express, db: DatabaseSync): void {
       last_error TEXT,
       in_flight INTEGER NOT NULL DEFAULT 0
     );
+    CREATE TABLE IF NOT EXISTS desk_scheduler_control(id INTEGER PRIMARY KEY CHECK(id=1),enabled INTEGER NOT NULL);
+    CREATE TABLE IF NOT EXISTS desk_schedule_windows(agent_id TEXT PRIMARY KEY REFERENCES agents(id) ON DELETE CASCADE,days TEXT NOT NULL,start TEXT NOT NULL,end TEXT NOT NULL,timezone TEXT NOT NULL);
     UPDATE desk_agent_schedules
-      SET enabled = 0, in_flight = 0, last_error = 'Interrupted dispatch; inspect task history before enabling again'
+      SET enabled = 0, in_flight = 0, last_error = 'Disparo interrompido; confira o histórico antes de reativar'
       WHERE in_flight = 1;
   `);
-  const globallyEnabled = process.env.MESA_SCHEDULER_ENABLED === "true";
+  db.prepare("INSERT OR IGNORE INTO desk_scheduler_control VALUES(1,?)").run(Number(process.env.MESA_SCHEDULER_ENABLED === "true"));
+  const globallyEnabled=()=>db.prepare("SELECT enabled FROM desk_scheduler_control WHERE id=1").get()?.enabled===1;
+  const windowFor=(id:string):ScheduleWindow=>{const row=db.prepare("SELECT days,start,end,timezone FROM desk_schedule_windows WHERE agent_id=?").get(id) as {days:string;start:string;end:string;timezone:string}|undefined;return row?{...row,days:JSON.parse(row.days)}:defaultWindow;};
+  app.get("/api/desk/scheduler",(_req,res)=>res.json({enabled:globallyEnabled()}));
+  app.put("/api/desk/scheduler",(req,res)=>{if(typeof req.body?.enabled!=="boolean")return res.status(400).json({error:"Estado inválido"});db.exec("BEGIN IMMEDIATE");try{db.prepare("UPDATE desk_scheduler_control SET enabled=? WHERE id=1").run(Number(req.body.enabled));if(!req.body.enabled)db.exec("UPDATE desk_agent_schedules SET enabled=0");db.exec("COMMIT");}catch(e){db.exec("ROLLBACK");throw e;}return res.json({enabled:globallyEnabled()});});
   const agent = (id: string) => db.prepare("SELECT * FROM agents WHERE id = ?").get(id);
   const configured = (a: ReturnType<typeof agent>) =>
     Boolean(
@@ -51,7 +68,8 @@ export function installAgentScheduler(app: Express, db: DatabaseSync): void {
     const id = String(req.params.agentId);
     if (!agent(id)) return res.status(404).json({ error: "agent_not_found" });
     return res.json({
-      globally_enabled: globallyEnabled,
+      globally_enabled: globallyEnabled(),
+      window:windowFor(id),
       schedule: db.prepare("SELECT * FROM desk_agent_schedules WHERE agent_id = ?").get(id) ?? null,
     });
   });
@@ -80,8 +98,12 @@ export function installAgentScheduler(app: Express, db: DatabaseSync): void {
     ) {
       return res.status(400).json({ error: "invalid_schedule_or_template" });
     }
-    if (enabled && (!globallyEnabled || !configured(a)))
+    const w:ScheduleWindow=body.window??windowFor(id);
+    if(!validScheduleWindow(w))return res.status(400).json({error:"Dias, horário ou fuso inválidos"});
+    if (enabled && (!globallyEnabled() || !configured(a)))
       return res.status(409).json({ error: "scheduler_disabled_or_agent_not_configured" });
+    db.exec("BEGIN IMMEDIATE");
+    try {
     db.prepare(
       `
       INSERT INTO desk_agent_schedules (agent_id, template_task_id, enabled, interval_minutes, max_runs, next_run_at)
@@ -91,9 +113,11 @@ export function installAgentScheduler(app: Express, db: DatabaseSync): void {
         next_run_at=excluded.next_run_at, last_task_id=NULL, last_error=NULL
     `,
     ).run(id, template_task_id, Number(enabled), interval_minutes, max_runs, Date.now() + interval_minutes * 60000);
+    db.prepare("INSERT INTO desk_schedule_windows VALUES(?,?,?,?,?) ON CONFLICT(agent_id) DO UPDATE SET days=excluded.days,start=excluded.start,end=excluded.end,timezone=excluded.timezone").run(id,JSON.stringify(w.days),w.start,w.end,w.timezone);
+    db.exec("COMMIT");}catch(e){db.exec("ROLLBACK");throw e;}
     return res.json({ ok: true });
   });
-  if (!globallyEnabled) return;
+
 
   const post = async (route: string, body: object) => {
     const response = await fetch("http://127.0.0.1:" + PORT + route, {
@@ -114,7 +138,7 @@ export function installAgentScheduler(app: Express, db: DatabaseSync): void {
   };
   let ticking = false;
   const tick = async () => {
-    if (ticking) return;
+    if (ticking || !globallyEnabled()) return;
     ticking = true;
     try {
       const now = Date.now();
@@ -125,11 +149,12 @@ export function installAgentScheduler(app: Express, db: DatabaseSync): void {
         .all(now) as unknown as Schedule[];
       await Promise.all(
         due.map(async (s) => {
+          if(!withinScheduleWindow(now,windowFor(s.agent_id))){db.prepare("UPDATE desk_agent_schedules SET next_run_at=? WHERE agent_id=? AND in_flight=0").run(now+60000,s.agent_id);return;}
           const a = agent(s.agent_id);
           const t = template(s.template_task_id, s.agent_id);
           if (!configured(a) || !t) {
             db.prepare("UPDATE desk_agent_schedules SET enabled=0,last_error=? WHERE agent_id=?").run(
-              "Missing configuration or template",
+              "Configuração ou tarefa de referência ausente",
               s.agent_id,
             );
             return;
@@ -164,7 +189,7 @@ export function installAgentScheduler(app: Express, db: DatabaseSync): void {
             const stillEnabled = db
               .prepare("SELECT enabled FROM desk_agent_schedules WHERE agent_id=?")
               .get(s.agent_id)?.enabled;
-            if (stillEnabled !== 1) throw new Error("Schedule disabled before execution");
+            if (stillEnabled !== 1 || !globallyEnabled() || !withinScheduleWindow(Date.now(),windowFor(s.agent_id))) throw new Error("Agenda desativada ou fora da janela antes da execução");
             await post("/api/tasks/" + encodeURIComponent(created.id) + "/run", {});
             db.prepare("UPDATE desk_agent_schedules SET last_error=NULL WHERE agent_id=?").run(s.agent_id);
           } catch (error) {

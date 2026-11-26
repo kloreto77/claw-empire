@@ -2,11 +2,11 @@
 import { useEffect, useState, useRef } from "react";
 import type { Agent, Task, MeetingPresence, CrossDeptDelivery, CeoOfficeCall } from "../../types";
 import { buildSpriteMap } from "../AgentAvatar";
-import { money,pct,Ranking,type Market } from "./market";
+import { money,pct,type Market } from "./market";
 
 export const statusName=(a:Agent)=>!a.cli_provider||(a.cli_provider==="api"&&(!a.api_provider_id||!a.api_model))?"Sem modelo":({idle:"Disponível",working:"Trabalhando",break:"Em pausa",offline:"Desconectado"}[a.status]??a.status);
 type Props={agents:Agent[];tasks:Task[];meetings:MeetingPresence[];deliveries:CrossDeptDelivery[];calls:CeoOfficeCall[];market:Market|null;onSelect:(a:Agent)=>void;onMeeting:()=>void;onDeliveryDone:(id:string)=>void;onCallDone:(id:string)=>void;onMarket:()=>void};
-function Desk({x,y,executive=false}:{x:number;y:number;executive?:boolean}){return <g transform={"translate("+x+" "+y+")"}><path d="M-66 -20 L66 -20 78 3 -54 3Z" fill={executive?"#584238":"#b28a60"} stroke="#665444" strokeWidth="2"/><path d="M-54 3H78V13H-54Z" fill="#76563e"/><path d="M-48 13v29m117-29v29" stroke="#55483e" strokeWidth="6"/><path d="M-20 -25h42v21h-42z" fill="#303632" stroke="#151c1b" strokeWidth="3"/><path d="M-16 -21h34v13h-34z" fill="#75948b"/><path d="M0 -4v5m-10 1h20" stroke="#383b38" strokeWidth="3"/><path d="M-15 7h34" stroke="#d5c9b2" strokeWidth="3"/><rect x="37" y="-11" width="12" height="8" fill="#ded7c8"/></g>}
+function Desk({x,y,executive=false}:{x:number;y:number;executive?:boolean}){return <g transform={"translate("+x+" "+y+")"}><path d="M-66 -20 L66 -20 78 3 -54 3Z" fill={executive?"#584238":"#b28a60"} stroke="#665444" strokeWidth="2"/><path d="M-54 3H78V13H-54Z" fill="#76563e"/><rect x="-19" y="17" width="42" height="32" rx="7" fill="#4b534c" stroke="#343b34" strokeWidth="2"/><path d="M-48 13v29m117-29v29" stroke="#55483e" strokeWidth="6"/><path d="M-20 -25h42v21h-42z" fill="#303632" stroke="#151c1b" strokeWidth="3"/><path d="M-16 -21h34v13h-34z" fill="#75948b"/><path d="M0 -4v5m-10 1h20" stroke="#383b38" strokeWidth="3"/><path d="M-15 7h34" stroke="#d5c9b2" strokeWidth="3"/><rect x="37" y="-11" width="12" height="8" fill="#ded7c8"/></g>}
 export default function Office({agents,tasks,meetings,deliveries,calls,market,onSelect,onMeeting,onDeliveryDone,onCallDone,onMarket}:Props){
   const [zoom,setZoom]=useState(1),[size,setSize]=useState({width:0,height:0}),[phase,setPhase]=useState(0);
   const viewport=useRef<HTMLDivElement>(null);
@@ -18,7 +18,7 @@ export default function Office({agents,tasks,meetings,deliveries,calls,market,on
   const height=Math.max(850,500+Math.ceil(workers.length/4)*155),width=Math.max(1130,390+leaders.length*145);
   useEffect(()=>{if(!deliveries.length&&!calls.length)return;const t=window.setTimeout(()=>{deliveries.forEach(v=>onDeliveryDone(v.id));calls.forEach(v=>onCallDone(v.id));},4500);return()=>window.clearTimeout(t);},[deliveries,calls,onDeliveryDone,onCallDone]);
   return <div className="mv3-office"><div className="mv3-toolbar"><span>Andar de operações</span><small>{agents.filter(a=>a.status==="working").length} em atividade · {agents.length} agentes · clique em um personagem para configurar</small><div><button onClick={()=>setZoom(z=>Math.max(.8,z-.15))}>−</button><button onClick={()=>setZoom(1)}>Ajustar</button><button onClick={()=>setZoom(z=>Math.min(2,z+.15))}>+</button><button onClick={()=>{if(document.fullscreenElement)void document.exitFullscreen();else void document.documentElement.requestFullscreen().catch(()=>{});}}>Tela cheia</button></div></div>
-  <div className="mv3-scroller" ref={viewport}><div className="mv3-floor" style={{width:Math.round(Math.max(720,Math.min(size.width||width,(size.height||height)*width/height))*zoom),aspectRatio:width+"/"+height}}>
+  <div className="mv3-scroller" ref={viewport}><div className="mv3-floor" style={{width:Math.round(Math.max(820,Math.min(size.width||width,(size.height||height)*width/height))*zoom),aspectRatio:width+"/"+height}}>
     <svg viewBox={"0 0 "+width+" "+height} className="mv3-floorplan" aria-label="Planta do escritório">
       <defs><pattern id="mv3-wood" width="80" height="24" patternUnits="userSpaceOnUse"><rect width="80" height="24" fill="#d8c6aa"/><path d="M0 0H80M0 24H80M40 0V24" stroke="#bfa888" strokeWidth="1"/></pattern><pattern id="mv3-tile" width="32" height="32" patternUnits="userSpaceOnUse"><rect width="32" height="32" fill="#c2c6bd"/><path d="M0 0H32V32" fill="none" stroke="#aeb4aa"/></pattern></defs>
       <rect x="22" y="22" width={width-44} height={height-44} rx="7" fill="url(#mv3-wood)" stroke="#454942" strokeWidth="12"/>
@@ -43,5 +43,5 @@ export default function Office({agents,tasks,meetings,deliveries,calls,market,on
       const state=meet?"Em reunião":call?"Reportando":target?"Colaborando":statusName(a);
       return <button key={a.id} className={"mv3-person "+(a.status==="working"?"mv3-working":"")} style={{left:dest.x/width*100+"%",top:dest.y/height*100+"%"}} onClick={()=>onSelect(a)} title={a.name+" · "+state+(task?" · "+task.title:"")}><img src={"/sprites/"+(sprite.get(a.id)??1)+"-D-1.png"} alt=""/><span>{a.name}</span><small>{state}</small></button>;
     })}
-  </div></div><div className="mv3-floorfooter"><span>● Simulação local · sem dinheiro real</span><span>Movimentos de trabalho vinculados às atividades registradas.</span></div></div>;
+  </div></div><div className="mv3-floorfooter"><span>● Simulação local · {market?.total_assets??"…"} ativos · sem dinheiro real</span><span>Movimentos de trabalho vinculados às atividades registradas.</span></div></div>;
 }

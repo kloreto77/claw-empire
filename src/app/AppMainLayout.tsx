@@ -1,3 +1,4 @@
+import DeskSettings from "../components/mesa-v3/DeskSettings";
 import Office, { statusName } from "../components/mesa-v3/Office";
 import AgentDrawer from "../components/mesa-v3/AgentDrawer";
 import { useMarket, MarketScreen, Ranking } from "../components/mesa-v3/market";
@@ -373,7 +374,7 @@ export default function AppMainLayout({
   const visibleAgents=officePresentation.agents;
   const chosen=visibleAgents.find(a=>a.id===selectedId);
   const select=(id:string)=>{if(visibleAgents.some(a=>a.id===id))setSelectedId(id);};
-  const navigate=(next:typeof screen)=>{setScreen(next);setView(next==="settings"?"settings":"office");};
+  const navigate=(next:typeof screen)=>{setScreen(next);setView("office");};
   const legacy=view==="tasks"||view==="skills"||view==="agents"||view==="settings";
   return (
     <I18nProvider language={labels.uiLanguage}>
@@ -385,7 +386,8 @@ export default function AppMainLayout({
           {screen==="office"&&!legacy&&<Office agents={visibleAgents} tasks={tasksForActivePack} meetings={meetingPresence} deliveries={crossDeptDeliveries} calls={ceoOfficeCalls} market={market} onSelect={a=>select(a.id)} onMeeting={()=>activeMeetingTaskId?onOpenActiveMeetingMinutes(activeMeetingTaskId):onOpenReportHistory()} onDeliveryDone={onCrossDeptDeliveryProcessed} onCallDone={onCeoOfficeCallProcessed} onMarket={()=>navigate("market")}/>}
           {screen==="market"&&!legacy&&<MarketScreen market={market} error={error} onSelect={select}/>}
           {screen==="ranking"&&!legacy&&<div className="mv3-page"><h2>Desempenho</h2>{error&&<p role="alert">Dados de mercado temporariamente indisponíveis.</p>}<Ranking market={market} onSelect={select}/><h3>Atividade operacional</h3><table><thead><tr><th>Agente</th><th>Status</th><th>Tarefas concluídas</th></tr></thead><tbody>{visibleAgents.map(a=><tr key={a.id}><td><button className="mv3-link" onClick={()=>select(a.id)}>{a.name}</button></td><td>{statusName(a)}</td><td>{a.stats_tasks_done}</td></tr>)}</tbody></table></div>}
-          {legacy&&<div className="mv3-legacy"><div className="mv3-legacy-nav"><button onClick={()=>navigate("office")}>Voltar ao escritório</button><button onClick={()=>setView("agents")}>Equipe</button><button onClick={()=>setView("tasks")}>Tarefas</button><button onClick={()=>setView("skills")}>Skills</button><button onClick={()=>setView("settings")}>Conexões gerais</button><button onClick={onOpenDecisionInbox}>Decisões ({decisionInboxCount})</button><button onClick={onOpenReportHistory}>Relatórios</button></div>
+          {screen==="settings"&&!legacy&&<DeskSettings agents={visibleAgents} onSelect={select} onAdvanced={()=>setView("settings")} onDecisions={onOpenDecisionInbox} onReports={onOpenReportHistory} onAnnouncement={onOpenAnnouncement}/>}
+          {legacy&&<div className="mv3-legacy"><div className="mv3-legacy-nav"><button onClick={()=>navigate("settings")}>Voltar à Mesa</button><button onClick={()=>setView("agents")}>Equipe</button><button onClick={()=>setView("tasks")}>Tarefas</button><button onClick={()=>setView("skills")}>Skills</button><button onClick={()=>setView("settings")}>Conexões gerais</button><button onClick={onOpenDecisionInbox}>Decisões ({decisionInboxCount})</button><button onClick={onOpenReportHistory}>Relatórios</button></div>
             {view==="tasks"&&<TaskBoard tasks={tasksForActivePack} agents={displayAgents} departments={displayDepartments} subtasks={subtasks} onCreateTask={handleCreateTaskForActivePack} onUpdateTask={onUpdateTask} onDeleteTask={onDeleteTask} onAssignTask={onAssignTask} onRunTask={onRunTask} onStopTask={onStopTask} onPauseTask={onPauseTask} onResumeTask={onResumeTask} onOpenTerminal={onOpenTerminal} onOpenMeetingMinutes={onOpenMeetingMinutes}/>}
             {view==="agents"&&<AgentManager agents={managerAgents} departments={managerDepartments} onAgentsChange={onAgentsChange} activeOfficeWorkflowPack={officePackKey} dbBackedOfficePack={isHydratedOfficePack} onSaveOfficePackProfile={async(packKey,profile)=>{if(packKey==="development")return;await onSaveSettings({...settings,officePackProfiles:{...(settings.officePackProfiles??{}),[packKey]:profile}});}}/>}
             {view==="skills"&&<SkillsLibrary agents={agents}/>}

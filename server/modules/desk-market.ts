@@ -42,7 +42,8 @@ export function installDeskMarket(app: Express, db: DatabaseSync) {
     const peak=Math.max(a.peak,equity), drawdown=Math.max(a.drawdown,(peak-equity)/peak*100);
     if(peak!==a.peak || drawdown!==a.drawdown) db.prepare("UPDATE desk_market_accounts SET peak=?,drawdown=? WHERE agent_id=?").run(peak,drawdown,id);
     const stats=db.prepare("SELECT COUNT(*) AS trades, SUM(CASE WHEN side='sell' THEN 1 ELSE 0 END) AS closed, SUM(CASE WHEN side='sell' AND realized>0 THEN 1 ELSE 0 END) AS wins, COALESCE(SUM(realized),0) AS realized FROM desk_market_trades WHERE agent_id=?").get(id) as {trades:number;closed:number|null;wins:number|null;realized:number};
-    return {agent_id:id,cash:a.cash,equity,enabled:Boolean(a.enabled),positions:holdings,return_pct:(equity/INITIAL_CENTS-1)*100,drawdown_pct:drawdown,trades:stats.trades,win_pct:stats.closed?Number(stats.wins)/stats.closed*100:null,realized:stats.realized};
+    const usage=db.prepare("SELECT 1 FROM sqlite_master WHERE type=\'table\' AND name=\'desk_model_usage\'").get()?db.prepare("SELECT SUM(total_tokens) AS tokens,SUM(cost_usd) AS cost_usd FROM desk_model_usage WHERE agent_id=?").get(id):null;
+    return {tokens:usage?.tokens??null,cost_usd:usage?.cost_usd??null,agent_id:id,cash:a.cash,equity,enabled:Boolean(a.enabled),positions:holdings,return_pct:(equity/INITIAL_CENTS-1)*100,drawdown_pct:drawdown,trades:stats.trades,win_pct:stats.closed?Number(stats.wins)/stats.closed*100:null,realized:stats.realized};
   };
   // The price path is shared, reproducible, and advances by wall clock; no external exchange.
   const details=(symbol:string,tick:number)=>{

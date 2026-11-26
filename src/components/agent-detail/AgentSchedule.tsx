@@ -11,7 +11,9 @@ interface Schedule {
   next_run_at: number;
   last_error: string | null;
 }
+type ScheduleWindow={days:number[];start:string;end:string;timezone:string};
 interface ScheduleResponse {
+  window?:ScheduleWindow;
   globally_enabled: boolean;
   schedule: Schedule | null;
 }
@@ -20,6 +22,7 @@ export default function AgentSchedule({ agent, tasks }: { agent: Agent; tasks: T
   const [template, setTemplate] = useState("");
   const [interval, setIntervalMinutes] = useState(60);
   const [maxRuns, setMaxRuns] = useState(1);
+  const [windowConfig,setWindowConfig]=useState<ScheduleWindow>({days:[0,1,2,3,4,5,6],start:"00:00",end:"24:00",timezone:"America/Sao_Paulo"});
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const url = "/api/desk/schedules/" + encodeURIComponent(agent.id);
@@ -41,6 +44,7 @@ export default function AgentSchedule({ agent, tasks }: { agent: Agent; tasks: T
       .then((result) => {
         if (cancelled) return;
         setData(result);
+        if(result.window)setWindowConfig(result.window);
         setTemplate(result.schedule?.template_task_id ?? "");
         setIntervalMinutes(result.schedule?.interval_minutes ?? 60);
         setMaxRuns(result.schedule?.max_runs ?? 1);
@@ -60,7 +64,7 @@ export default function AgentSchedule({ agent, tasks }: { agent: Agent; tasks: T
         url,
         stopOnly
           ? { enabled: false }
-          : { enabled, template_task_id: template, interval_minutes: interval, max_runs: maxRuns },
+          : { enabled, template_task_id: template, interval_minutes: interval, max_runs: maxRuns, window:windowConfig },
       );
       setData(await request<ScheduleResponse>(url));
       setMessage(
@@ -77,6 +81,7 @@ export default function AgentSchedule({ agent, tasks }: { agent: Agent; tasks: T
     }
   }
   const valid =
+    windowConfig.days.length>0 && windowConfig.start<windowConfig.end &&
     templates.some((t) => t.id === template) &&
     Number.isInteger(interval) &&
     interval >= 5 &&
@@ -93,7 +98,7 @@ export default function AgentSchedule({ agent, tasks }: { agent: Agent; tasks: T
       </p>
       {data?.globally_enabled === false && (
         <p className="text-amber-300">
-          Motor desativado no servidor. Você pode preparar a agenda sem iniciar execuções.
+          Motor global desativado. Ative em Configurações → Autonomia. Você pode preparar a agenda sem iniciar execuções.
         </p>
       )}
       {!configured && (
@@ -138,6 +143,7 @@ export default function AgentSchedule({ agent, tasks }: { agent: Agent; tasks: T
           />
         </label>
       </div>
+      <div><p>Dias permitidos</p><div className="mv3-row">{["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"].map((d,i)=><button key={d} type="button" aria-pressed={windowConfig.days.includes(i)} onClick={()=>setWindowConfig(w=>({...w,days:w.days.includes(i)?w.days.filter(v=>v!==i):[...w.days,i]}))}>{d}</button>)}</div><label>Início da janela<input type="time" value={windowConfig.start} onChange={e=>setWindowConfig(w=>({...w,start:e.target.value}))}/></label><label>Fim da janela (24:00 = fim do dia)<input value={windowConfig.end} placeholder="24:00" pattern="([01][0-9]|2[0-3]):[0-5][0-9]|24:00" onChange={e=>setWindowConfig(w=>({...w,end:e.target.value}))}/></label><label>Fuso horário IANA<input value={windowConfig.timezone} onChange={e=>setWindowConfig(w=>({...w,timezone:e.target.value}))}/></label><p>Fora da janela não são disparadas novas tarefas. Não é um calendário de pregão real.</p></div>
       {data?.schedule?.enabled === 1 && (
         <p>Próxima tentativa: {new Date(data.schedule.next_run_at).toLocaleString("pt-BR")}</p>
       )}
