@@ -1,0 +1,89 @@
+name: Mesa 3.1.2 - release e atualização pública
+on:
+  push:
+    branches: [mesa-axiom-release-3.1.2]
+    paths:
+      - .github/workflows/mesa-axiom-release.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: mesa-release-3.1.2
+  cancel-in-progress: false
+env:
+  PREVIEW_RUN: "45881853791"
+  SOURCE_SHA: "e5f13925be89f8c9645e91e25b9790c70773d7bd"
+  RELEASE_VERSION: "3.1.2"
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 65
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - name: Require exact successful Windows and visual validation
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh run watch "$PREVIEW_RUN" --repo "$GITHUB_REPOSITORY" --exit-status --interval 20
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$PREVIEW_RUN" | jq -e --arg sha "$SOURCE_SHA" '.head_sha == $sha and .head_branch == "mesa-axiom-integration" and .conclusion == "success"'
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$PREVIEW_RUN/jobs" | jq -e '[.jobs[] | select(.name == "validate" or .name == "package") | .conclusion] == ["success","success"]'
+      - uses: actions/download-artifact@v4
+        with:
+          name: Mesa-AXIOM-Integrated-Windows-x64
+          path: desktop-release
+          github-token: ${{ github.token }}
+          run-id: 45881853791
+      - name: Publish only the previously validated installer
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          exe="desktop-release/Mesa-V2-Setup-$RELEASE_VERSION-x64.exe"
+          test -s "$exe"
+          test -s "$exe.blockmap"
+          test -s desktop-release/app-asar.sha256
+          grep -Fx "version: $RELEASE_VERSION" desktop-release/latest.yml
+          expected="$(sed -n 's/^sha512: //p' desktop-release/latest.yml | tr -d '\r')"
+          actual="$(openssl dgst -sha512 -binary "$exe" | openssl base64 -A)"
+          test -n "$expected" && test "$expected" = "$actual"
+          if gh release view "v$RELEASE_VERSION" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release already exists; refusing to overwrite"
+            exit 1
+          fi
+          gh release create "v$RELEASE_VERSION" "$exe" "$exe.blockmap" desktop-release/latest.yml --repo "$GITHUB_REPOSITORY" --target "$SOURCE_SHA" --latest --title "Mesa de Operações 3.1.2" --notes "AXIOM COLLECT_ONLY com worker Python empacotado e análise de qualidade de dados integrada. Inclui código de pesquisa matemática, mas não habilita ordens AXIOM nem treinamento autônomo ou supervisor Qwen operacional. Escritório preservado. Windows x64. Verificação do atualizador público em job separado; instalador experimental sem assinatura."
+  verify-public-update:
+    needs: publish
+    runs-on: windows-2025
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: actions/download-artifact@v4
+        with:
+          name: Mesa-AXIOM-Integrated-Windows-x64
+          path: desktop-release
+          github-token: ${{ github.token }}
+          run-id: 45881853791
+      - name: Verify public upgrade from installed 3.1.1 to 3.1.2
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $script = Get-Content './desktop/test-public-update.ps1' -Raw
+          $script = $script.Replace('2.0.8','3.1.1').Replace('2\.0\.8','3\.1\.1')
+          $path = Join-Path $PWD 'desktop/test-public-update-311.ps1'
+          [IO.File]::WriteAllText($path,$script)
+          & $path
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Mesa-AXIOM-public-update-diagnostics
+          path: desktop-public-diagnostics/
+          if-no-files-found: ignore
