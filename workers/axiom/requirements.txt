@@ -1,0 +1,7 @@
+numpy>=1.26,<3
+pandas>=2.2,<4
+scikit-learn>=1.5,<2
+catboost>=1.2.8,<2
+ripser>=0.6.12,<1
+persim>=0.3.8,<1
+pytest>=8,<10
