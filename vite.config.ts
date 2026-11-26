@@ -77,6 +77,7 @@ export default defineConfig({
     outDir: "dist",
     chunkSizeWarningLimit: 550,
     rollupOptions: {
+      input: { main: "index.html", mesa3d: "mesa-3d.html" },
       output: {
         manualChunks,
       },

@@ -1,9 +1,9 @@
 {
   "name": "mesa-operacoes-desktop",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "private": true,
   "main": "main.cjs",
-  "description": "Mesa de Operações V3 para Windows",
+  "description": "Mesa de Operações V3.1 para Windows",
   "author": "KMS",
   "devDependencies": {
     "electron": "45.5.0",

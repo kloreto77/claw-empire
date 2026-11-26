@@ -1,5 +1,7 @@
 import DeskSettings from "../components/mesa-v3/DeskSettings";
-import Office, { statusName } from "../components/mesa-v3/Office";
+import { statusName } from "../components/mesa-v3/Office";
+import Office3D from "../components/mesa-v3/Office3D";
+import { createAgent } from "../api";
 import AgentDrawer from "../components/mesa-v3/AgentDrawer";
 import { useMarket, MarketScreen, Ranking } from "../components/mesa-v3/market";
 import "../components/mesa-v3/mesa.css";
@@ -383,7 +385,7 @@ export default function AppMainLayout({
           {([["office","Escritório"],["market","Mercado"],["ranking","Desempenho"],["settings","Configurações"]] as const).map(([id,label])=><button key={id} aria-pressed={screen===id} onClick={()=>navigate(id)}>{label}</button>)}
         </nav><span className="mv3-connection">{connected?"● Servidor conectado":"○ Servidor desconectado"}</span></header>
         <main className="mv3-content">
-          {screen==="office"&&!legacy&&<Office agents={visibleAgents} tasks={tasksForActivePack} meetings={meetingPresence} deliveries={crossDeptDeliveries} calls={ceoOfficeCalls} market={market} onSelect={a=>select(a.id)} onMeeting={()=>activeMeetingTaskId?onOpenActiveMeetingMinutes(activeMeetingTaskId):onOpenReportHistory()} onDeliveryDone={onCrossDeptDeliveryProcessed} onCallDone={onCeoOfficeCallProcessed} onMarket={()=>navigate("market")}/>}
+          {screen==="office"&&!legacy&&<Office3D connected={connected} inlineCreate={officePackKey==="development"} onTeam={()=>setView("agents")} onRanking={()=>navigate("ranking")} onConnections={()=>navigate("settings")} onCreateAgent={async(name,role)=>{if(!connected||officePackKey!=="development")throw new Error("Cadastro indisponível neste escritório.");if(visibleAgents.length>=12)throw new Error("Todas as estações estão ocupadas.");if(visibleAgents.some(a=>a.name.trim().toLowerCase()===name.toLowerCase()))throw new Error("Já existe um agente com este nome.");const a=await createAgent({name,name_ko:name,name_ja:name,name_zh:name,department_id:departments.some(d=>d.id==="operations")?"operations":null,role,cli_provider:"",avatar_emoji:"🤖",personality:null,workflow_pack_key:officePackKey});onAgentsChange();return a;}} agents={visibleAgents} tasks={tasksForActivePack} meetings={meetingPresence} deliveries={crossDeptDeliveries} calls={ceoOfficeCalls} market={market} onSelect={a=>select(a.id)} onMeeting={()=>activeMeetingTaskId?onOpenActiveMeetingMinutes(activeMeetingTaskId):onOpenReportHistory()} onDeliveryDone={onCrossDeptDeliveryProcessed} onCallDone={onCeoOfficeCallProcessed} onMarket={()=>navigate("market")}/>}
           {screen==="market"&&!legacy&&<MarketScreen market={market} error={error} onSelect={select}/>}
           {screen==="ranking"&&!legacy&&<div className="mv3-page"><h2>Desempenho</h2>{error&&<p role="alert">Dados de mercado temporariamente indisponíveis.</p>}<Ranking market={market} onSelect={select}/><h3>Atividade operacional</h3><table><thead><tr><th>Agente</th><th>Status</th><th>Tarefas concluídas</th></tr></thead><tbody>{visibleAgents.map(a=><tr key={a.id}><td><button className="mv3-link" onClick={()=>select(a.id)}>{a.name}</button></td><td>{statusName(a)}</td><td>{a.stats_tasks_done}</td></tr>)}</tbody></table></div>}
           {screen==="settings"&&!legacy&&<DeskSettings agents={visibleAgents} onSelect={select} onAdvanced={()=>setView("settings")} onDecisions={onOpenDecisionInbox} onReports={onOpenReportHistory} onAnnouncement={onOpenAnnouncement}/>}

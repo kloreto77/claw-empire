@@ -1,0 +1,41 @@
+
+import {chromium} from "playwright";
+import assert from "node:assert/strict";
+import {mkdir} from "node:fs/promises";
+const browser=await chromium.launch({headless:true,args:["--use-angle=swiftshader","--enable-unsafe-swiftshader"]});
+await mkdir("mesa-v3-visual",{recursive:true});
+try{
+ const page=await browser.newPage({viewport:{width:1366,height:768},locale:"pt-BR"});
+ const errors=[];page.on("pageerror",e=>errors.push(e.message));
+ await page.addInitScript(token=>sessionStorage.setItem("claw_api_auth_token",token),process.env.API_AUTH_TOKEN);
+ await page.goto(process.env.QA_BASE_URL??"http://127.0.0.1:18791",{waitUntil:"domcontentloaded"});
+ const scene=page.frameLocator('iframe[title="Escritório 3D · Imersão Nitidez"]');
+ await scene.locator("canvas").waitFor({timeout:60000});
+ await scene.getByRole("combobox",{name:"Selecionar agente"}).waitFor();
+ assert.equal(await scene.getByRole("combobox",{name:"Selecionar agente"}).locator("option").count(),9);
+ await page.screenshot({path:"mesa-v3-visual/escritorio.png"});
+ await scene.getByRole("combobox",{name:"Selecionar agente"}).selectOption("1");
+ await scene.getByRole("button",{name:"Configurar agente",exact:true}).click();
+ await page.getByRole("button",{name:"Instruções",exact:true}).click();
+ await page.getByPlaceholder("Ainda não definido. Configure a estratégia quando estiver pronto.").waitFor();
+ await page.screenshot({path:"mesa-v3-visual/agente.png"});
+ await page.getByRole("button",{name:"Ferramentas",exact:true}).click();
+ await page.getByText("Conexões operacionais individuais").waitFor();
+ await page.getByRole("button",{name:"Fechar configuração"}).click();
+ await scene.getByRole("button",{name:"+ Criar agente",exact:true}).click();
+ await scene.getByPlaceholder("Ex.: Agente Atlas").fill("Agente QA Imersão");
+ await scene.getByRole("button",{name:"Criar e ocupar mesa",exact:true}).click();
+ await scene.getByRole("combobox",{name:"Selecionar agente"}).locator("option").filter({hasText:"Agente QA Imersão"}).waitFor({state:"attached",timeout:60000});
+ assert.equal(await scene.getByRole("combobox",{name:"Selecionar agente"}).locator("option").count(),10);
+ await page.getByRole("button",{name:"Mercado",exact:true}).click();
+ await page.getByRole("textbox",{name:"Pesquisar ativos"}).fill("PETR4");
+ await page.getByRole("button",{name:"PETR4",exact:true}).waitFor();
+ await page.getByRole("button",{name:"PETR4",exact:true}).click();
+ await page.getByRole("img",{name:"Velas de PETR4"}).waitFor();
+ await page.screenshot({path:"mesa-v3-visual/mercado.png"});
+ await page.getByRole("button",{name:"Configurações",exact:true}).click();
+ await page.getByRole("heading",{name:"Configurações da Mesa"}).waitFor();
+ await page.getByRole("button",{name:"Habilitar motor"}).waitFor();
+ assert.deepEqual(errors,[]);
+ console.log("Mesa 3D: escritório WebGL, cadastro real, painel individual, mercado e configurações renderizados.");
+}finally{await browser.close();}
