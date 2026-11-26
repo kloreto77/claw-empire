@@ -128,7 +128,7 @@ def split(frame,start):
     """Fixed 30/7/7 calendar days; 120-minute purge+embargo; holdout untouched."""
     a,b,c=int(start)+30*DAY,int(start)+37*DAY,int(start)+44*DAY
     gap=120*MINUTE
-    if frame.end.max()<c-MINUTE: raise ValueError("44 calendar days required; collect only")
+    if frame.get("mature_at",frame.end).max()<c-MINUTE: raise ValueError("44 calendar days required; collect only")
     ranges=((start,a-gap),(a+gap,b-gap),(b+gap,c))
     sets=[]
     for lo,hi in ranges:
