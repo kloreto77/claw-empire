@@ -3,9 +3,9 @@ import { createHash } from "node:crypto";
 import { PORT, SESSION_AUTH_TOKEN } from "../config/runtime.ts";
 
 const definitions=[
-  {type:"function",function:{name:"mercado_simulado",description:"Consultar preços, velas e liquidez do mercado fictício local. Nenhuma cotação é real.",parameters:{type:"object",properties:{},additionalProperties:false}}},
+  {type:"function",function:{name:"mercado_simulado",description:"Pesquisar qualquer ativo do catálogo simulado por nome, código, categoria ou região. Lista paginada; para velas informe symbol. Nenhuma cotação é real.",parameters:{type:"object",properties:{symbol:{type:"string"},search:{type:"string"},category:{type:"string"},offset:{type:"integer",minimum:0}},additionalProperties:false}}},
   {type:"function",function:{name:"minha_carteira_simulada",description:"Consultar exclusivamente sua carteira fictícia, saldo, posições e histórico.",parameters:{type:"object",properties:{},additionalProperties:false}}},
-  {type:"function",function:{name:"ordem_simulada",description:"Executar uma compra ou venda à vista no simulador, somente com capital fictício. A ordem pode ser recusada pelo servidor.",parameters:{type:"object",properties:{symbol:{type:"string",enum:["AUR","NEX","VLT","ORB","SOLX","BRV"]},side:{type:"string",enum:["buy","sell"]},quantity:{type:"integer",minimum:1,maximum:10000}},required:["symbol","side","quantity"],additionalProperties:false}}}
+  {type:"function",function:{name:"ordem_simulada",description:"Executar uma compra ou venda à vista no simulador, somente com capital fictício. A ordem pode ser recusada pelo servidor.",parameters:{type:"object",properties:{symbol:{type:"string",description:"Código exato do catálogo do simulador"},side:{type:"string",enum:["buy","sell"]},quantity:{type:"integer",minimum:1,maximum:10000}},required:["symbol","side","quantity"],additionalProperties:false}}}
 ];
 type RequestData={url:string;headers:Record<string,string>;body:string};
 type ToolCall={id:string;type:"function";function:{name:string;arguments:string}};
@@ -41,11 +41,12 @@ export async function runDeskMarketAgent(o:MarketAgentOptions):Promise<void>{
         const name=tool.function.name;
         const args=JSON.parse(tool.function.arguments||"{}") as Record<string,unknown>;
         if(name==="mercado_simulado"||name==="minha_carteira_simulada"){
-          const url=name==="mercado_simulado"?localBase:localBase+"/agents/"+encodeURIComponent(o.agentId);
+          const query=new URLSearchParams({limit:"30"});for(const k of ["search","category","offset"])if(args[k]!==undefined)query.set(k,String(args[k]));
+          const url=name==="mercado_simulado"?(typeof args.symbol==="string"?localBase+"/quote/"+encodeURIComponent(args.symbol):localBase+"/quotes?"+query):localBase+"/agents/"+encodeURIComponent(o.agentId);
           const r=await send(url,{headers:localHeaders,redirect:"error",signal:o.signal});
           if(!r.ok)throw new Error("Consulta indisponível: "+r.status);
           const payload=await r.json() as Record<string,unknown>;
-          result=name==="mercado_simulado"?{simulated:true,updated_at:payload.updated_at,assets:payload.assets}:payload;
+          result=payload;
         }else if(name==="ordem_simulada"){
           const key=createHash("sha256").update(o.taskId+"\0"+tool.id).digest("hex");
           const r=await send(localBase+"/agents/"+encodeURIComponent(o.agentId)+"/orders",{method:"POST",headers:localHeaders,redirect:"error",signal:o.signal,body:JSON.stringify({symbol:args.symbol,side:args.side,quantity:args.quantity,order_id:key,task_id:o.taskId})});

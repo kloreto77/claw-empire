@@ -15,6 +15,14 @@ test("simulated exchange: isolated wallets, permission, idempotency, funds and p
     const initial=await http.get("/api/desk/market").expect(200);
     assert.equal(initial.body.simulated,true);
     assert.equal(initial.body.assets.length,6);
+    assert.ok(initial.body.total_assets>400);
+    const catalog=await http.get("/api/desk/market/catalog").expect(200);
+    assert.equal(catalog.body.assets.length,initial.body.total_assets);
+    assert.ok(catalog.body.assets.some((a:{symbol:string})=>a.symbol==="BTC"));
+    const filtered=await http.get("/api/desk/market/quotes?category=Criptomoedas&limit=5").expect(200);
+    assert.equal(filtered.body.assets.length,5);assert.ok(filtered.body.total>50);
+    const btc=await http.get("/api/desk/market/quote/BTC").expect(200);assert.equal(btc.body.candles.length,36);
+    await http.get("/api/desk/market/quote/INVALID").expect(404);
     assert.equal(initial.body.accounts.length,2);
     assert.ok(initial.body.accounts.every((a:{cash:number;enabled:boolean})=>a.cash===INITIAL_CENTS&&!a.enabled));
     const buy={symbol:"AUR",side:"buy",quantity:2,order_id:"test-buy-001"};
