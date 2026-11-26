@@ -111,7 +111,7 @@ export function installAxiom(app:Express,db:DatabaseSync,logsDir:string){
         try{
           const msg=JSON.parse(raw.toString()),d=msg.data,now=Date.now();if(!d||typeof d.s!=="string")return;
           lastMessage=now;record("WS",d,now);
-          if(d.s===fxSymbol&&msg.stream.endsWith("@bookTicker")){
+          if(fxSymbol&&d.s===fxSymbol&&msg.stream.endsWith("@bookTicker")){
             const bid=Number(d.b),ask=Number(d.a);fx=bid>0&&ask>=bid&&Number.isFinite(ask)?{symbol:fxSymbol,bid,ask,ts:now}:null;return;
           }
           if(!buffers.has(d.s))return;
