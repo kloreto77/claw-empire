@@ -1,3 +1,4 @@
+import { loadDeskExternalTools } from "../../../desk-connections.ts";
 import { runDeskMarketAgent } from "../../../desk-market-agent.ts";
 import fs from "node:fs";
 import { randomUUID } from "node:crypto";
@@ -247,9 +248,11 @@ export function createApiProviderTools(deps: CreateApiProviderToolsDeps) {
       }
     };
     try {
-      if(marketOwner?.assigned_agent_id && taskId){
-        const agentId=marketOwner.assigned_agent_id;
-        await runDeskMarketAgent({request:req,agentId,taskId,signal,usage,stillAllowed:()=>Boolean(db.prepare("SELECT 1 FROM tasks t JOIN desk_market_accounts a ON a.agent_id=t.assigned_agent_id WHERE t.id=? AND t.assigned_agent_id=? AND t.status='in_progress' AND a.enabled=1").get(taskId,agentId)),write:text=>{safeWrite(text);broadcast('cli_output',{task_id:taskId,stream:'stdout',data:text});}});
+      const taskOwner=taskId&&provider.type!=="anthropic"&&provider.type!=="google"?(db.prepare("SELECT assigned_agent_id FROM tasks WHERE id=? AND status='in_progress'").get(taskId) as {assigned_agent_id:string}|undefined):undefined;
+      const externalTools=taskOwner?.assigned_agent_id?await loadDeskExternalTools(db,taskOwner.assigned_agent_id,signal):[];
+      if(taskId&&taskOwner?.assigned_agent_id&&(marketOwner||externalTools.length)){
+        const agentId=taskOwner.assigned_agent_id;
+        await runDeskMarketAgent({request:req,agentId,taskId,signal,usage,marketEnabled:Boolean(marketOwner),externalTools,stillAllowed:()=>Boolean(db.prepare("SELECT 1 FROM tasks WHERE id=? AND assigned_agent_id=? AND status='in_progress'").get(taskId,agentId))&&(!marketOwner||Boolean(db.prepare("SELECT 1 FROM desk_market_accounts WHERE agent_id=? AND enabled=1").get(agentId))),write:text=>{safeWrite(text);broadcast('cli_output',{task_id:taskId,stream:'stdout',data:text});}});
       } else {
       const resp = await fetch(req.url, {
         method: "POST",
