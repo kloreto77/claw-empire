@@ -13,6 +13,8 @@ import time
 from axiom_science import Science,canonical
 from axiom_research import HORIZONS,FEATURES,MINUTE,DAY,load_minutes,fit_horizon
 from axiom_supervisor import review
+from axiom_scheduler import Scheduler
+import os
 
 VERSION="1.0.0-draft"
 def utc_ms(): return int(time.time()*1000)
@@ -104,6 +106,7 @@ def main():
     p.add_argument("--state",required=True,help="separate scientific state directory")
     sub=p.add_subparsers(dest="cmd",required=True)
     sub.add_parser("scan")
+    sub.add_parser("tick")
     t=sub.add_parser("train");t.add_argument("--start-ms",type=int,required=True);t.add_argument("--output",required=True)
     r=sub.add_parser("review");r.add_argument("--id",required=True);r.add_argument("--question",default="Revisão científica do estado atual e qualidade dos dados.")
     a=p.parse_args()
@@ -114,6 +117,17 @@ def main():
         eid=store.evidence("DATA_QUALITY",cutoff,quality)
         if a.cmd=="scan":result={**quality,"evidence_id":eid}
         elif a.cmd=="train":result=train(paths,a.start_ms,cutoff,a.output,store)
+        elif a.cmd=="tick":
+            scheduler=Scheduler(store)
+            handlers={}
+            if os.environ.get("OPENROUTER_API_KEY"):
+                def daily(id,ts):
+                    return review(store,id,ts,VERSION,"Revisão diária científica.",[e["id"] for e in store.context(ts,10)])
+                def weekly(id,ts):
+                    return review(store,id,ts,VERSION,"Revisão semanal e hipóteses falsificáveis.",[e["id"] for e in store.context(ts,10)])
+                handlers={"daily":daily,"weekly":weekly}
+            result={**quality,"evidence_id":eid,"scheduled":scheduler.tick(cutoff,handlers),
+                    "supervisor_configured":bool(handlers),"jobs":[{k:v for k,v in j.items() if k!="detail"} for j in scheduler.status()]}
         else:
             result=review(store,a.id,cutoff,VERSION,a.question,[e["id"] for e in store.context(cutoff,10)])
         write_json(state/"last_result.json",result);print(canonical(result))
