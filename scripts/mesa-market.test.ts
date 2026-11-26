@@ -44,3 +44,17 @@ test("simulated exchange: isolated wallets, permission, idempotency, funds and p
     assert.ok(quote("AUR",123).ask>quote("AUR",123).bid);
   } finally {db.close();}
 });
+
+test("eight concurrent simulated operators can trade any registered asset independently",async()=>{
+ const db=new DatabaseSync(":memory:");db.exec("CREATE TABLE agents(id TEXT PRIMARY KEY,name TEXT,role TEXT)");
+ const ids=Array.from({length:8},(_,i)=>"agent-"+i);for(const id of ids)db.prepare("INSERT INTO agents VALUES(?,?,'junior')").run(id,id);
+ const app=express();app.use(express.json());installDeskMarket(app,db);const http=supertest(app);
+ try{
+  await http.post("/api/desk/market/catalog").send({symbol:"CUSTOM-X",name:"Novo ativo",category:"Personalizados",base_cents:10000,volatility:1}).expect(201);
+  await http.post("/api/desk/market/catalog").send({symbol:"CUSTOM-X",name:"Duplicado",category:"Personalizados",base_cents:10000,volatility:1}).expect(409);
+  await http.get("/api/desk/market/quote/CUSTOM-X").expect(200);
+  await Promise.all(ids.map(id=>http.put("/api/desk/market/agents/"+id+"/permission").send({enabled:true}).expect(200)));
+  await Promise.all(ids.map(id=>http.post("/api/desk/market/agents/"+id+"/orders").send({symbol:"CUSTOM-X",side:"buy",quantity:1,order_id:"custom-"+id}).expect(201)));
+  const market=await http.get("/api/desk/market").expect(200);assert.equal(market.body.accounts.length,8);assert.ok(market.body.accounts.every((a:{trades:number;positions:{symbol:string;quantity:number}[]})=>a.trades===1&&a.positions[0].symbol==="CUSTOM-X"&&a.positions[0].quantity===1));
+ }finally{db.close();}
+});

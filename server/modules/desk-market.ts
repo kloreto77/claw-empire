@@ -3,14 +3,14 @@ import type { Express } from "express";
 import type { DatabaseSync } from "node:sqlite";
 
 export const INITIAL_CENTS = 10_000_000;
-import { ASSETS, SYMBOLS, getAsset, assetHash } from "./desk-market-catalog.ts";
+import { ASSETS, SYMBOLS, getAsset, assetHash, type MarketAsset } from "./desk-market-catalog.ts";
 export { SYMBOLS } from "./desk-market-catalog.ts";
 type SymbolName = string;
 const TICK_MS = 2000;
-export function quote(symbol: SymbolName, tick: number) {
-  const asset=getAsset(symbol);
+export function quote(symbol: SymbolName, tick: number, custom?:MarketAsset) {
+  const asset=custom??getAsset(symbol);
   if(!asset) throw new Error("Ativo não cadastrado");
-  const i=SYMBOLS.indexOf(symbol), legacy=i<6;
+  const i=SYMBOLS.indexOf(symbol), legacy=i>=0&&i<6;
   const phase=tick+(legacy?i*137:assetHash(symbol)%100000);
   const vol=asset.volatility;
   const trend = 0.10 * Math.sin(phase / 240) + 0.045 * Math.sin(phase / 41);
@@ -26,10 +26,25 @@ type Position = { symbol: SymbolName; quantity: number; basis: number };
 type Trade = { id: string; agent_id: string; symbol: SymbolName; side: string; quantity: number; price: number; fee: number; realized: number; created_at: number };
 export function installDeskMarket(app: Express, db: DatabaseSync) {
   db.exec(`
+    CREATE TABLE IF NOT EXISTS desk_market_custom_assets(symbol TEXT PRIMARY KEY,name TEXT NOT NULL,category TEXT NOT NULL,region TEXT NOT NULL,base INTEGER NOT NULL,volatility REAL NOT NULL);
     CREATE TABLE IF NOT EXISTS desk_market_accounts(agent_id TEXT PRIMARY KEY REFERENCES agents(id) ON DELETE CASCADE, cash INTEGER NOT NULL, peak INTEGER NOT NULL, drawdown REAL NOT NULL DEFAULT 0, enabled INTEGER NOT NULL DEFAULT 0);
     CREATE TABLE IF NOT EXISTS desk_market_positions(agent_id TEXT NOT NULL REFERENCES agents(id) ON DELETE CASCADE, symbol TEXT NOT NULL, quantity INTEGER NOT NULL, basis INTEGER NOT NULL, PRIMARY KEY(agent_id,symbol));
     CREATE TABLE IF NOT EXISTS desk_market_trades(id TEXT PRIMARY KEY, agent_id TEXT NOT NULL REFERENCES agents(id) ON DELETE CASCADE, symbol TEXT NOT NULL, side TEXT NOT NULL, quantity INTEGER NOT NULL, price INTEGER NOT NULL, fee INTEGER NOT NULL, realized INTEGER NOT NULL, created_at INTEGER NOT NULL);
   `);
+  const custom=new Map<string,MarketAsset>((db.prepare("SELECT * FROM desk_market_custom_assets").all() as unknown as MarketAsset[]).map(a=>[a.symbol,a]));
+  const lookup=(symbol:string)=>getAsset(symbol)??custom.get(symbol);
+  const allAssets=()=>[...ASSETS,...custom.values()];
+  const price=(symbol:string,tick:number)=>quote(symbol,tick,custom.get(symbol));
+  app.post("/api/desk/market/catalog",(req,res)=>{
+    const b=req.body??{},symbol=typeof b.symbol==="string"?b.symbol.trim().toUpperCase():"",name=typeof b.name==="string"?b.name.trim():"";
+    const category=typeof b.category==="string"?b.category:"",base=b.base_cents,volatility=b.volatility;
+    if(!/^[A-Z0-9][A-Z0-9.:-]{0,24}$/.test(symbol)||!name||name.length>100||!["Ações","Criptomoedas","ETFs","Fundos imobiliários","Câmbio","Commodities","Índices","Renda fixa","Personalizados"].includes(category)||!Number.isSafeInteger(base)||base<100||base>100000000||typeof volatility!=="number"||!Number.isFinite(volatility)||volatility<.05||volatility>3)return res.status(400).json({error:"Código, categoria, preço fictício ou volatilidade inválidos"});
+    if(lookup(symbol))return res.status(409).json({error:"Código já existe no mercado"});
+    if(custom.size>=10000)return res.status(409).json({error:"Limite de ativos personalizados atingido"});
+    const asset={symbol,name,category,region:"Personalizado",base,volatility};
+    db.prepare("INSERT INTO desk_market_custom_assets VALUES(?,?,?,?,?,?)").run(symbol,name,category,asset.region,base,volatility);custom.set(symbol,asset);
+    return res.status(201).json({simulated:true,asset});
+  });
   const agentExists = (id:string) => Boolean(db.prepare("SELECT 1 FROM agents WHERE id=?").get(id));
   const ensure = (id:string) => {
     db.prepare("INSERT OR IGNORE INTO desk_market_accounts(agent_id,cash,peak) VALUES(?,?,?)").run(id,INITIAL_CENTS,INITIAL_CENTS);
@@ -38,7 +53,7 @@ export function installDeskMarket(app: Express, db: DatabaseSync) {
   const positions = (id:string) => db.prepare("SELECT symbol,quantity,basis FROM desk_market_positions WHERE agent_id=? AND quantity>0").all(id) as unknown as Position[];
   const account = (id:string,tick:number) => {
     const a=ensure(id), holdings=positions(id);
-    const equity=a.cash+holdings.reduce((n,p)=>n+p.quantity*quote(p.symbol,tick).bid,0);
+    const equity=a.cash+holdings.reduce((n,p)=>n+p.quantity*price(p.symbol,tick).bid,0);
     const peak=Math.max(a.peak,equity), drawdown=Math.max(a.drawdown,(peak-equity)/peak*100);
     if(peak!==a.peak || drawdown!==a.drawdown) db.prepare("UPDATE desk_market_accounts SET peak=?,drawdown=? WHERE agent_id=?").run(peak,drawdown,id);
     const stats=db.prepare("SELECT COUNT(*) AS trades, SUM(CASE WHEN side='sell' THEN 1 ELSE 0 END) AS closed, SUM(CASE WHEN side='sell' AND realized>0 THEN 1 ELSE 0 END) AS wins, COALESCE(SUM(realized),0) AS realized FROM desk_market_trades WHERE agent_id=?").get(id) as {trades:number;closed:number|null;wins:number|null;realized:number};
@@ -49,20 +64,20 @@ export function installDeskMarket(app: Express, db: DatabaseSync) {
   const details=(symbol:string,tick:number)=>{
       const candles=Array.from({length:36},(_,i)=>{
         const t=tick-(35-i)*5;
-        const prices=Array.from({length:5},(_,k)=>quote(symbol,t-4+k).last);
+        const prices=Array.from({length:5},(_,k)=>price(symbol,t-4+k).last);
         return {time:t*TICK_MS,open:prices[0],high:Math.max(...prices),low:Math.min(...prices),close:prices[4]};
       });
-      return {...quote(symbol,tick),candles,change_pct:(quote(symbol,tick).last/quote(symbol,tick-30).last-1)*100};
+      return {...price(symbol,tick),candles,change_pct:(price(symbol,tick).last/price(symbol,tick-30).last-1)*100};
   };
-  app.get("/api/desk/market/catalog",(_req,res)=>res.json({simulated:true,assets:ASSETS.map(({symbol,name,category,region})=>({symbol,name,category,region}))}));
+  app.get("/api/desk/market/catalog",(_req,res)=>res.json({simulated:true,assets:allAssets().map(({symbol,name,category,region})=>({symbol,name,category,region}))}));
   app.get("/api/desk/market/quotes",(req,res)=>{
     const tick=tickNow(),search=String(req.query.search??"").trim().toUpperCase(),category=String(req.query.category??"");
-    const rows=ASSETS.filter(a=>(!category||a.category===category)&&(!search||(a.symbol+" "+a.name+" "+a.region).toUpperCase().includes(search)));
+    const rows=allAssets().filter(a=>(!category||a.category===category)&&(!search||(a.symbol+" "+a.name+" "+a.region).toUpperCase().includes(search)));
     const limit=Math.min(100,Math.max(1,Number(req.query.limit)||30)),offset=Math.max(0,Math.floor(Number(req.query.offset)||0));
-    return res.json({simulated:true,total:rows.length,categories:[...new Set(ASSETS.map(a=>a.category))],assets:rows.slice(offset,offset+limit).map(a=>({...quote(a.symbol,tick),change_pct:(quote(a.symbol,tick).last/quote(a.symbol,tick-30).last-1)*100})),updated_at:tick*TICK_MS});
+    return res.json({simulated:true,total:rows.length,categories:[...new Set(allAssets().map(a=>a.category))],assets:rows.slice(offset,offset+limit).map(a=>({...price(a.symbol,tick),change_pct:(price(a.symbol,tick).last/price(a.symbol,tick-30).last-1)*100})),updated_at:tick*TICK_MS});
   });
   app.get("/api/desk/market/quote/:symbol",(req,res)=>{
-    const symbol=String(req.params.symbol).toUpperCase();if(!getAsset(symbol))return res.status(404).json({error:"Ativo não encontrado"});
+    const symbol=String(req.params.symbol).toUpperCase();if(!lookup(symbol))return res.status(404).json({error:"Ativo não encontrado"});
     return res.json({...details(symbol,tickNow()),simulated:true});
   });
   app.get("/api/desk/market",(_req,res)=>{
@@ -70,7 +85,7 @@ export function installDeskMarket(app: Express, db: DatabaseSync) {
     const assets=["BTC","ETH","PETR4","VALE3","SPY","OURO"].map(symbol=>details(symbol,tick));
     const agents=db.prepare("SELECT id,name,role FROM agents ORDER BY id").all() as unknown as {id:string;name:string;role:string}[];
     const accounts=agents.map(a=>({...account(a.id,tick),name:a.name,role:a.role})).sort((a,b)=>(b.return_pct-b.drawdown_pct*.5)-(a.return_pct-a.drawdown_pct*.5));
-    res.json({simulated:true,updated_at:tick*TICK_MS,initial_cents:INITIAL_CENTS,total_assets:ASSETS.length,assets,accounts});
+    res.json({simulated:true,updated_at:tick*TICK_MS,initial_cents:INITIAL_CENTS,total_assets:allAssets().length,assets,accounts});
   });
   app.get("/api/desk/market/agents/:id",(req,res)=>{
     const id=String(req.params.id);
@@ -88,7 +103,7 @@ export function installDeskMarket(app: Express, db: DatabaseSync) {
     const id=String(req.params.id), body=req.body??{};
     if(!agentExists(id)) return res.status(404).json({error:"Agente não encontrado"});
     const {symbol,side,quantity,order_id}=body;
-    if(typeof symbol!=="string"||!getAsset(symbol)||!["buy","sell"].includes(side)||!Number.isSafeInteger(quantity)||quantity<1||quantity>10000||typeof order_id!=="string"||!/^[a-zA-Z0-9_-]{8,100}$/.test(order_id))
+    if(typeof symbol!=="string"||!lookup(symbol)||!["buy","sell"].includes(side)||!Number.isSafeInteger(quantity)||quantity<1||quantity>10000||typeof order_id!=="string"||!/^[a-zA-Z0-9_-]{8,100}$/.test(order_id))
       return res.status(400).json({error:"Ordem inválida"});
     const existing=db.prepare("SELECT * FROM desk_market_trades WHERE id=?").get(order_id) as unknown as Trade|undefined;
     if(existing) {
@@ -98,7 +113,7 @@ export function installDeskMarket(app: Express, db: DatabaseSync) {
     if(body.task_id!==undefined && (typeof body.task_id!=="string" || !db.prepare("SELECT 1 FROM tasks WHERE id=? AND assigned_agent_id=? AND status='in_progress'").get(body.task_id,id))) return res.status(403).json({error:"Tarefa não está ativa para este agente"});
     const a=ensure(id);
     if(!a.enabled) return res.status(403).json({error:"Operações simuladas desativadas para este agente"});
-    const tick=tickNow(), q=quote(symbol,tick);
+    const tick=tickNow(), q=price(symbol,tick);
     if(quantity>q.liquidity) return res.status(409).json({error:"Quantidade excede a liquidez desta cotação"});
     const price=side==="buy"?q.ask:q.bid, gross=price*quantity, fee=Math.max(1,Math.ceil(gross*.001));
     const pos=positions(id).find(p=>p.symbol===symbol);

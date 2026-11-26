@@ -23,7 +23,32 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
-      - run: pnpm exec tsx --test scripts/mesa-seed.test.ts scripts/mesa-market.test.ts scripts/mesa-v3-agent.test.ts scripts/mesa-schedule-window.test.ts
+      - run: pnpm exec tsx --test scripts/mesa-seed.test.ts scripts/mesa-market.test.ts scripts/mesa-v3-agent.test.ts scripts/mesa-schedule-window.test.ts scripts/mesa-v3-connections.test.ts
+      - run: pnpm exec playwright install --with-deps chromium
+      - name: Smoke test visual com backend real
+        shell: bash
+        run: |
+          set -euo pipefail
+          runtime_dir="$(mktemp -d)"
+          export HOST=127.0.0.1 PORT=18791 MESA_SCHEDULER_ENABLED=false
+          export DB_PATH="$runtime_dir/mesa.sqlite" LOGS_DIR="$runtime_dir/logs"
+          export API_AUTH_TOKEN="$(openssl rand -hex 32)" OAUTH_ENCRYPTION_SECRET="$(openssl rand -hex 32)"
+          export QA_BASE_URL=http://127.0.0.1:18791
+          pnpm exec tsx server/index.ts > "$runtime_dir/server.log" 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true; cat "$runtime_dir/server.log"; rm -rf "$runtime_dir"' EXIT
+          for attempt in $(seq 1 45); do
+            if curl -fsS "$QA_BASE_URL/api/health" > /dev/null; then break; fi
+            if ! kill -0 "$server_pid" 2>/dev/null; then exit 1; fi
+            sleep 1
+          done
+          node scripts/qa/mesa-v3-smoke.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Mesa-V3-Visual
+          path: mesa-v3-visual/
+          if-no-files-found: ignore
   package:
     needs: validate
     runs-on: windows-2025
@@ -41,7 +66,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile --config.node-linker=hoisted
       - run: pnpm build
-      - run: pnpm exec tsx --test scripts/mesa-seed.test.ts scripts/mesa-market.test.ts scripts/mesa-v3-agent.test.ts scripts/mesa-schedule-window.test.ts
+      - run: pnpm exec tsx --test scripts/mesa-seed.test.ts scripts/mesa-market.test.ts scripts/mesa-v3-agent.test.ts scripts/mesa-schedule-window.test.ts scripts/mesa-v3-connections.test.ts
       - name: Stage local runtime
         shell: pwsh
         run: |
